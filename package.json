@@ -7,13 +7,37 @@
   "bin": {
     "homarus": "dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/cli.js start",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kcdjmaxx/HomarUS.git"
+  },
+  "author": "Max Ross",
+  "license": "MIT",
+  "homepage": "https://github.com/kcdjmaxx/HomarUS#readme",
+  "bugs": {
+    "url": "https://github.com/kcdjmaxx/HomarUS/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "coordinator",
+    "event-loop",
+    "llm",
+    "orchestration"
+  ],
   "engines": {
     "node": ">=22"
   },
