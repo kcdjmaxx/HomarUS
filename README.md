@@ -86,7 +86,7 @@ The `refs/`, `specs/`, and `design/` directories are the living design artifacts
 
 ## Status
 
-Core architecture implemented (19 source files, 70 requirements, 19 CRC cards, 6 sequence diagrams). Built-in tool suite complete. Currently pre-release — channel adapters and tests are in progress.
+Core architecture implemented (19 source files, 70 requirements, 20 CRC cards, 7 sequence diagrams, 37 tests passing across 5 test suites). Built-in tool suite complete. Currently pre-release.
 
 ## License
 
