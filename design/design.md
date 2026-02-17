@@ -65,7 +65,7 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
   - [x] test-AgentManager.md → `src/agent-manager.test.ts`
   - [x] test-ModelRouter.md → `src/model-router.test.ts`
   - [x] test-SkillManager.md → `src/skill-manager.test.ts`
-- [ ] O1: No built-in channel adapters beyond CLI (Telegram, Discord, Slack would be skills)
+- [x] O1: Telegram channel adapter implemented (`src/telegram-adapter.ts`), long-polling with exponential backoff
 - [x] O2:
 - [x] O3:
 - [ ] O4: Agent subprocess/remote execution strategies not implemented (only embedded mode)

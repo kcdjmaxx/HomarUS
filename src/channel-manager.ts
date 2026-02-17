@@ -1,6 +1,7 @@
 // CRC: crc-ChannelManager.md | Seq: seq-message-dispatch.md, seq-startup.md, seq-shutdown.md
 import type { Event, OutboundMessage, ChannelConfig, HealthStatus, Logger } from "./types.js";
 import { ChannelAdapter, CLIChannelAdapter } from "./channel-adapter.js";
+import { TelegramChannelAdapter } from "./telegram-adapter.js";
 
 export class ChannelManager {
   private adapters = new Map<string, ChannelAdapter>();
@@ -24,7 +25,9 @@ export class ChannelManager {
         case "cli":
           adapter = new CLIChannelAdapter(this.logger);
           break;
-        // Future: telegram, discord, slack, etc. would be registered here
+        case "telegram":
+          adapter = TelegramChannelAdapter.fromChannelConfig(config, this.logger);
+          break;
         default:
           this.logger.warn("Unknown channel type, skipping", { name });
           continue;
