@@ -1,3 +1,4 @@
+// CRC: crc-BrowserManager.md
 // Browser lifecycle manager — wraps Playwright, provides a persistent browser/page
 import type { BrowserConfig, Logger } from "./types.js";
 

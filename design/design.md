@@ -43,6 +43,7 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - [x] crc-Config.md → `src/config.ts`
 - [x] crc-HttpApi.md → `src/http-api.ts`
 - [x] crc-CLI.md → `src/cli.ts`
+- [x] crc-BrowserManager.md → `src/browser-manager.ts`
 
 ### Sequences
 - [x] seq-startup.md → `src/homarus.ts`
@@ -51,12 +52,14 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - [x] seq-skill-callback.md → `src/skill.ts`, `src/skill-transport.ts`, `src/http-api.ts`
 - [x] seq-timer-fire.md → `src/timer-service.ts`, `src/homarus.ts`
 - [x] seq-shutdown.md → `src/homarus.ts`, `src/agent-manager.ts`
+- [x] seq-browser-action.md → `src/browser-manager.ts`, `src/tools/browser.ts`
 
 ### Test Designs
 - [x] test-Homarus.md → `src/homarus.test.ts`
 - [x] test-AgentManager.md → `src/agent-manager.test.ts`
 - [x] test-ModelRouter.md → `src/model-router.test.ts`
 - [x] test-SkillManager.md → `src/skill-manager.test.ts`
+- [x] test-BrowserManager.md → `src/browser-manager.test.ts`
 
 ## Gaps
 
@@ -70,4 +73,4 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - [x] O3:
 - [x] O4: Agent subprocess execution strategy implemented (`src/execution-strategy.ts`, `src/subprocess-strategy.ts`, `src/agent-worker.ts`)
 
-- [ ] O5: BrowserManager needs proper mini-spec design (CRC card, sequences, test design)
+- [x] O5: BrowserManager mini-spec design complete (crc-BrowserManager.md, seq-browser-action.md, test-BrowserManager.md, browser-manager.test.ts)
