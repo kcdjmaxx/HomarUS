@@ -78,6 +78,12 @@ npm install playwright    # only needed if browser.enabled is set in config
 - Node.js >= 22
 - Unix-like system (Linux, macOS)
 
+## Built with mini-spec
+
+HomarUS was designed and implemented using [mini-spec](https://github.com/zot/mini-spec), an 8-phase methodology for AI-assisted software development. Every source file traces back through the full chain: reference materials → natural language specs → requirements → CRC cards → sequence diagrams → code with traceability comments.
+
+The `refs/`, `specs/`, and `design/` directories are the living design artifacts, not just documentation.
+
 ## Status
 
 Core architecture implemented (19 source files, 70 requirements, 19 CRC cards, 6 sequence diagrams). Built-in tool suite complete. Currently pre-release — channel adapters and tests are in progress.
