@@ -99,6 +99,12 @@ The `refs/`, `specs/`, and `design/` directories are the living design artifacts
 
 Core architecture implemented (19 source files, 70 requirements, 20 CRC cards, 7 sequence diagrams, 37 tests passing across 5 test suites). Built-in tool suite complete. Currently pre-release.
 
+## Roadmap
+
+- [ ] npm publish + SEA binaries + Homebrew tap
+- [ ] OAuth support for Google/Gemini (the only major provider with third-party OAuth)
+- [ ] `homarus auth` onboarding command (guided API key setup)
+
 ## License
 
 [MIT](LICENSE)
