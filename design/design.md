@@ -68,6 +68,6 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - [x] O1: Telegram channel adapter implemented (`src/telegram-adapter.ts`), long-polling with exponential backoff
 - [x] O2:
 - [x] O3:
-- [ ] O4: Agent subprocess/remote execution strategies not implemented (only embedded mode)
+- [x] O4: Agent subprocess execution strategy implemented (`src/execution-strategy.ts`, `src/subprocess-strategy.ts`, `src/agent-worker.ts`)
 
 - [ ] O5: BrowserManager needs proper mini-spec design (CRC card, sequences, test design)

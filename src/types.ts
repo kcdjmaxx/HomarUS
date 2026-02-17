@@ -40,6 +40,8 @@ export interface OutboundMessage {
 
 // --- Agents ---
 
+export type ExecutionStrategyType = "embedded" | "subprocess";
+
 export interface AgentConfig {
   prompt: string;
   model?: string;
@@ -52,6 +54,7 @@ export interface AgentConfig {
   channel?: string;
   taskOverlay?: string;
   replyTo?: string;
+  executionStrategy?: ExecutionStrategyType;
 }
 
 export type AgentState = "pending" | "running" | "complete" | "failed" | "cancelled";
@@ -229,6 +232,7 @@ export interface AgentsConfig {
   maxConcurrent?: number;
   defaultTimeout?: number;
   defaultMaxTurns?: number;
+  defaultExecutionStrategy?: ExecutionStrategyType;
 }
 
 export interface MemoryConfig {
