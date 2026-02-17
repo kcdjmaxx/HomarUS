@@ -53,18 +53,18 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - [x] seq-shutdown.md → `src/homarus.ts`, `src/agent-manager.ts`
 
 ### Test Designs
-- [ ] test-Homarus.md → `src/homarus.test.ts`
-- [ ] test-AgentManager.md → `src/agent-manager.test.ts`
-- [ ] test-ModelRouter.md → `src/model-router.test.ts`
-- [ ] test-SkillManager.md → `src/skill-manager.test.ts`
+- [x] test-Homarus.md → `src/homarus.test.ts`
+- [x] test-AgentManager.md → `src/agent-manager.test.ts`
+- [x] test-ModelRouter.md → `src/model-router.test.ts`
+- [x] test-SkillManager.md → `src/skill-manager.test.ts`
 
 ## Gaps
 
-- [ ] D1: Test files not yet implemented
-  - [ ] test-Homarus.md → `src/homarus.test.ts`
-  - [ ] test-AgentManager.md → `src/agent-manager.test.ts`
-  - [ ] test-ModelRouter.md → `src/model-router.test.ts`
-  - [ ] test-SkillManager.md → `src/skill-manager.test.ts`
+- [x] D1: Test files implemented (30 tests passing)
+  - [x] test-Homarus.md → `src/homarus.test.ts`
+  - [x] test-AgentManager.md → `src/agent-manager.test.ts`
+  - [x] test-ModelRouter.md → `src/model-router.test.ts`
+  - [x] test-SkillManager.md → `src/skill-manager.test.ts`
 - [ ] O1: No built-in channel adapters beyond CLI (Telegram, Discord, Slack would be skills)
 - [ ] O2: No built-in tools registered (bash, read, write, web_fetch) — need core tool implementations
 - [ ] O3: MemoryIndex embedding provider has no concrete implementation (only interface defined)
