@@ -37,7 +37,7 @@ homarus init        # Create ~/.homarus/ with default config
 homarus start       # Start the event loop
 ```
 
-Edit `~/.homarus/config.json` to add your API keys and configure models, channels, and skills.
+Edit `~/.homarus/config.json` to add your API keys and configure models, channels, and skills. See the **[Setup & Usage Guide](docs/guide.md)** for detailed configuration, Telegram setup, and more.
 
 ## Architecture
 
