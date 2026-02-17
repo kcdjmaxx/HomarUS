@@ -180,6 +180,17 @@ export interface HealthStatus {
   lastCheck: number;
 }
 
+// --- Browser ---
+
+export interface BrowserConfig {
+  enabled?: boolean;
+  headless?: boolean;
+  executablePath?: string;
+  proxy?: string;
+  viewport?: { width: number; height: number };
+  timeout?: number;
+}
+
 // --- Config ---
 
 export interface ConfigData {
@@ -191,6 +202,7 @@ export interface ConfigData {
   server: ServerConfig;
   timers: TimersConfig;
   identity: IdentityConfig;
+  browser?: BrowserConfig;
 }
 
 export interface ModelsConfig {

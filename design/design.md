@@ -69,3 +69,5 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - [ ] O2: No built-in tools registered (bash, read, write, web_fetch) — need core tool implementations
 - [ ] O3: MemoryIndex embedding provider has no concrete implementation (only interface defined)
 - [ ] O4: Agent subprocess/remote execution strategies not implemented (only embedded mode)
+
+- [ ] O5: BrowserManager needs proper mini-spec design (CRC card, sequences, test design)

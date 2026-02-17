@@ -13,6 +13,7 @@ const DEFAULT_CONFIG: ConfigData = {
   server: { port: 18800 },
   timers: { enabled: true },
   identity: {},
+  browser: { enabled: false, headless: true },
 };
 
 // Keys that can be hot-reloaded without restart

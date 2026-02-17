@@ -38,6 +38,7 @@ Edit `~/.homarus/config.json` to add your API keys and configure models, channel
 - **IdentityManager** — layered soul/user/overlay identity system
 - **TimerService** — cron expressions, intervals, one-shots via croner
 - **HttpApi** — REST API for status, skill callbacks, and external integrations
+- **BrowserManager** — optional Playwright-based headless browser (lazy-loaded, requires `npm install playwright`)
 - **Config** — JSON config with JSON Schema validation and hot reload
 
 ## CLI
@@ -60,6 +61,16 @@ Skills go in `~/.homarus/skills/` or `./skills/`.
 Identity files in `~/.homarus/identity/`.
 Memory index at `~/.homarus/memory/`.
 
+## Built-in tools
+
+Agents get access to: `bash`, `read`, `write`, `edit`, `glob`, `grep`, `git`, `web_fetch`, `web_search`, `lsp`, `memory_search`, `memory_get`, `memory_store`, and optionally `browser`.
+
+Browser support requires Playwright as an optional dependency:
+
+```bash
+npm install playwright    # only needed if browser.enabled is set in config
+```
+
 ## Requirements
 
 - Node.js >= 22
@@ -67,7 +78,7 @@ Memory index at `~/.homarus/memory/`.
 
 ## Status
 
-Core architecture implemented (19 source files, 70 requirements, 19 CRC cards, 6 sequence diagrams). Currently pre-release — channel adapters, built-in tools, and tests are in progress.
+Core architecture implemented (19 source files, 70 requirements, 19 CRC cards, 6 sequence diagrams). Built-in tool suite complete. Currently pre-release — channel adapters and tests are in progress.
 
 ## License
 

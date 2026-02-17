@@ -8,9 +8,10 @@ export interface ToolPolicy {
 }
 
 const BUILTIN_GROUPS: Record<string, string[]> = {
-  "group:fs": ["read", "write", "edit"],
-  "group:runtime": ["bash"],
+  "group:fs": ["read", "write", "edit", "glob", "grep"],
+  "group:runtime": ["bash", "git"],
   "group:web": ["web_fetch", "web_search", "browser"],
+  "group:code": ["lsp"],
   "group:memory": ["memory_search", "memory_get", "memory_store"],
 };
 

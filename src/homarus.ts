@@ -14,6 +14,8 @@ import { IdentityManager } from "./identity-manager.js";
 import { TimerService } from "./timer-service.js";
 import { HttpApi } from "./http-api.js";
 import { OpenAICompatibleProvider, AnthropicProvider } from "./model-provider.js";
+import { BrowserManager } from "./browser-manager.js";
+import { registerBuiltinTools } from "./tools/index.js";
 
 export type LoopState = "starting" | "running" | "stopping" | "stopped";
 
@@ -31,6 +33,7 @@ export class Homarus {
   private identityManager: IdentityManager;
   private timerService!: TimerService;
   private httpApi!: HttpApi;
+  private browserManager: BrowserManager | null = null;
   private logger: Logger;
   private processing = false;
   private processInterval: ReturnType<typeof setInterval> | null = null;
@@ -124,6 +127,14 @@ export class Homarus {
       }
     }
 
+    // 5b. Browser (lazy — launches on first tool use)
+    if (configData.browser?.enabled) {
+      this.browserManager = new BrowserManager(this.logger, configData.browser);
+    }
+
+    // 5c. Register built-in tools
+    registerBuiltinTools(this.toolRegistry, this.memoryIndex, this.browserManager, this.logger);
+
     // 6. Skill manager
     this.skillManager = new SkillManager(
       this.logger,
@@ -185,6 +196,7 @@ export class Homarus {
     await this.skillManager.stopAll();
     this.skillManager.stopWatching();
     this.memoryIndex.stopWatching();
+    if (this.browserManager) await this.browserManager.close();
     await this.httpApi.stop();
 
     // Drain remaining events
