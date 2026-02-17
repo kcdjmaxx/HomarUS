@@ -17,11 +17,22 @@ Webhooks (HTTP callbacks)                                  Tools, Memory, Models
 
 The loop is a **scheduler and router**, not an AI agent. It receives events, decides what work needs to happen, spawns agents to do it, and handles the results. Agents run in parallel with configurable concurrency, backpressure, and failover.
 
+## Install
+
+```bash
+npm install -g homarus
+```
+
+Or use without installing:
+
+```bash
+npx homarus init
+npx homarus start
+```
+
 ## Quick start
 
 ```bash
-npm install
-npm run build
 homarus init        # Create ~/.homarus/ with default config
 homarus start       # Start the event loop
 ```
