@@ -66,8 +66,8 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
   - [x] test-ModelRouter.md → `src/model-router.test.ts`
   - [x] test-SkillManager.md → `src/skill-manager.test.ts`
 - [ ] O1: No built-in channel adapters beyond CLI (Telegram, Discord, Slack would be skills)
-- [ ] O2: No built-in tools registered (bash, read, write, web_fetch) — need core tool implementations
-- [ ] O3: MemoryIndex embedding provider has no concrete implementation (only interface defined)
+- [x] O2:
+- [x] O3:
 - [ ] O4: Agent subprocess/remote execution strategies not implemented (only embedded mode)
 
 - [ ] O5: BrowserManager needs proper mini-spec design (CRC card, sequences, test design)

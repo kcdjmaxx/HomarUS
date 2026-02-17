@@ -15,6 +15,7 @@ import { TimerService } from "./timer-service.js";
 import { HttpApi } from "./http-api.js";
 import { OpenAICompatibleProvider, AnthropicProvider } from "./model-provider.js";
 import { BrowserManager } from "./browser-manager.js";
+import { createEmbeddingProvider } from "./embedding-provider.js";
 import { registerBuiltinTools } from "./tools/index.js";
 
 export type LoopState = "starting" | "running" | "stopping" | "stopped";
@@ -114,6 +115,16 @@ export class Homarus {
     const home = process.env.HOME ?? ".";
     const memoryConfig = configData.memory;
     if (memoryConfig?.embedding) {
+      // Create embedding provider from config
+      const embeddingProvider = createEmbeddingProvider({
+        provider: memoryConfig.embedding.provider,
+        model: memoryConfig.embedding.model,
+        baseUrl: memoryConfig.embedding.baseUrl,
+        apiKey: memoryConfig.embedding.apiKey,
+        dimensions: memoryConfig.embedding.dimensions,
+      }, this.logger);
+      this.memoryIndex.setEmbeddingProvider(embeddingProvider);
+
       const dbPath = `${home}/.homarus/memory/index.sqlite`;
       try {
         await this.memoryIndex.initialize(dbPath);

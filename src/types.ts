@@ -232,7 +232,13 @@ export interface AgentsConfig {
 }
 
 export interface MemoryConfig {
-  embedding?: { provider: string; model: string; baseUrl?: string };
+  embedding?: {
+    provider: string;
+    model: string;
+    baseUrl?: string;
+    apiKey?: string;
+    dimensions?: number;
+  };
   search?: { vectorWeight?: number; ftsWeight?: number };
   extraPaths?: string[];
 }
