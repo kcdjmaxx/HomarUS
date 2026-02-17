@@ -1,5 +1,7 @@
 # HomarUS
 
+> **Why "HomarUS"?** *Homarus* is the genus of true clawed lobsters — the evolved successor to the claw. The **US** isn't just taxonomy. It's the whole point: human and AI, working together. There is no artificial intelligence without *us*.
+
 Event-driven AI agent coordinator. Receives events from channels, skills, timers, and webhooks — spawns parallel agents to handle the work.
 
 Model-agnostic. Skill-based. Built for people who want to run their own AI infrastructure.
