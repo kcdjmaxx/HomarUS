@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { Homarus } from "./homarus.js";
+import { runSetupWizard, buildConfigFromWizard } from "./setup-wizard.js";
 import type { Logger } from "./types.js";
 
 const logger: Logger = {
@@ -13,6 +14,7 @@ const logger: Logger = {
 };
 
 const [,, command, ...args] = process.argv;
+const noWizard = args.includes("--no-wizard");
 
 async function main(): Promise<void> {
   switch (command) {
@@ -50,10 +52,11 @@ async function start(): Promise<void> {
 }
 
 // CRC: crc-CLI.md — init()
-function init(): void {
+async function init(): Promise<void> {
   const home = process.env.HOME ?? ".";
   const configDir = resolve(home, ".homarus");
   const configPath = resolve(configDir, "config.json");
+  const envPath = resolve(configDir, ".env");
 
   if (existsSync(configPath)) {
     logger.info("Config already exists", { path: configPath });
@@ -67,30 +70,49 @@ function init(): void {
   mkdirSync(resolve(configDir, "memory"), { recursive: true });
   mkdirSync(resolve(configDir, "skills"), { recursive: true });
 
-  const defaultConfig = {
-    models: {
-      default: "anthropic/claude-sonnet-4-5",
-      aliases: { smart: "anthropic/claude-opus-4-5", fast: "anthropic/claude-haiku-4-5" },
-      providers: {
-        anthropic: { apiKey: "${ANTHROPIC_API_KEY}" },
-      },
-    },
-    channels: { cli: {} },
-    agents: { maxConcurrent: 5, defaultTimeout: 300000, defaultMaxTurns: 20 },
-    memory: { embedding: { provider: "ollama", model: "nomic-embed-text", baseUrl: "http://127.0.0.1:11434/v1" } },
-    skills: { paths: [resolve(configDir, "skills")] },
-    server: { port: 18800 },
-    timers: { enabled: true },
-    identity: { dir: resolve(configDir, "identity"), workspaceDir: resolve(configDir, "workspace") },
-  };
+  let configObj: Record<string, unknown>;
+  let envLines: string[] = [];
 
-  writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
+  if (noWizard || !process.stdin.isTTY) {
+    // Non-interactive: use defaults
+    configObj = {
+      models: {
+        default: "anthropic/claude-sonnet-4-5",
+        aliases: { smart: "anthropic/claude-opus-4-5", fast: "anthropic/claude-haiku-4-5" },
+        providers: {
+          anthropic: { apiKey: "${ANTHROPIC_API_KEY}" },
+        },
+      },
+      channels: { cli: {} },
+      agents: { maxConcurrent: 5, defaultTimeout: 300000, defaultMaxTurns: 20 },
+      memory: { embedding: { provider: "ollama", model: "nomic-embed-text", baseUrl: "http://127.0.0.1:11434/v1" } },
+      skills: { paths: [resolve(configDir, "skills")] },
+      server: { port: 18800 },
+      timers: { enabled: true },
+      identity: { dir: resolve(configDir, "identity"), workspaceDir: resolve(configDir, "workspace") },
+    };
+  } else {
+    // Interactive wizard
+    const result = await runSetupWizard();
+    const built = buildConfigFromWizard(result, configDir);
+    configObj = built.config;
+    envLines = built.envLines;
+  }
+
+  writeFileSync(configPath, JSON.stringify(configObj, null, 2));
   writeFileSync(resolve(configDir, "identity/soul.md"), "# Soul\n\nYou are a helpful AI assistant.");
   writeFileSync(resolve(configDir, "identity/user.md"), "# User\n\nNo user profile configured.");
 
+  if (envLines.length > 0) {
+    writeFileSync(envPath, envLines.join("\n") + "\n", { mode: 0o600 });
+    console.log(`Secrets written to ${envPath}`);
+  }
+
   logger.info("Initialized homarus", { configDir });
   console.log(`Config created at ${configPath}`);
-  console.log("Edit the config to add your API keys and customize settings.");
+  if (noWizard || !process.stdin.isTTY) {
+    console.log("Edit the config to add your API keys and customize settings.");
+  }
 }
 
 // CRC: crc-CLI.md — status()
@@ -195,7 +217,7 @@ function printUsage(): void {
 
 Usage:
   homarus start [config-path]   Start the event loop (foreground)
-  homarus init                  Create default config and directories
+  homarus init [--no-wizard]     Create config via interactive wizard (or defaults)
   homarus status [port]         Show status of running instance
   homarus config [config-path]  Validate config file
   homarus skills                List loaded skills
