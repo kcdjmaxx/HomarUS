@@ -36,11 +36,12 @@ export abstract class ChannelAdapter {
   }
 
   // CRC: crc-ChannelAdapter.md — normalizeInbound()
-  protected normalizeInbound(payload: MessagePayload): Event {
+  protected normalizeInbound(payload: MessagePayload, target?: string): Event {
+    const source = target ? `channel:${this.name}:${target}` : `channel:${this.name}`;
     return {
       id: uuid(),
       type: "message",
-      source: `channel:${this.name}`,
+      source,
       timestamp: Date.now(),
       payload,
     };
@@ -65,6 +66,16 @@ export abstract class ChannelAdapter {
       return;
     }
     const event = this.normalizeInbound(payload);
+    this.messageHandler?.(event);
+  }
+
+  // Like deliver, but includes a target (e.g., chat ID) for reply routing
+  protected deliverWithTarget(payload: MessagePayload, target: string): void {
+    if (!this.checkAccess(payload)) {
+      this.logger.debug("Message rejected by policy", { channel: this.name, from: payload.from });
+      return;
+    }
+    const event = this.normalizeInbound(payload, target);
     this.messageHandler?.(event);
   }
 }

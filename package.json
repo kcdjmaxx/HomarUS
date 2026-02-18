@@ -1,6 +1,6 @@
 {
   "name": "homarus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Event-loop based AI agent coordinator",
   "type": "module",
   "main": "dist/cli.js",

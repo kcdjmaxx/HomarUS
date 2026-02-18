@@ -198,7 +198,7 @@ export class TelegramChannelAdapter extends ChannelAdapter {
     const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
     const isMention = this.detectMention(msg);
 
-    this.deliver({
+    this.deliverWithTarget({
       from: msg.from?.username ?? String(msg.from?.id ?? "unknown"),
       channel: "telegram",
       text: isMention ? this.stripMention(msg.text) : msg.text,
@@ -206,7 +206,7 @@ export class TelegramChannelAdapter extends ChannelAdapter {
       isMention,
       replyTo: String(msg.message_id),
       raw: msg,
-    });
+    }, String(msg.chat.id));
   }
 
   private detectMention(msg: TelegramMessage): boolean {
