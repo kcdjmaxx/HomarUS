@@ -49,17 +49,35 @@ node dist/cli.js start
 
 ### Initialize
 
-After installing, run `init` to scaffold the default config and directory structure:
+After installing, run `init` to launch the interactive setup wizard:
 
 ```bash
 homarus init
 ```
+
+The wizard walks you through:
+
+1. **Provider selection** — Anthropic, OpenAI, OpenRouter, or Ollama
+2. **API key** — entered securely (masked input), saved to `~/.homarus/.env` with `600` permissions
+3. **Default model** — choose from provider-specific options
+4. **Telegram setup** (optional) — bot token, DM policy, group policy
+
+After the wizard completes, your config is ready to use immediately.
+
+To skip the wizard and generate a default config for manual editing:
+
+```bash
+homarus init --no-wizard
+```
+
+The wizard is also skipped automatically in non-interactive environments (piped input, CI).
 
 This creates:
 
 ```
 ~/.homarus/
   config.json          # Main configuration
+  .env                 # API keys and secrets (mode 600, gitignored)
   identity/
     soul.md            # Agent personality
     user.md            # User profile
@@ -797,7 +815,7 @@ homarus - Event-driven AI agent coordinator
 
 Usage:
   homarus start [config-path]   Start the event loop (foreground)
-  homarus init                  Create default config and directories
+  homarus init [--no-wizard]    Interactive setup wizard (or defaults)
   homarus status [port]         Show status of running instance
   homarus config [config-path]  Validate config file
   homarus skills                List loaded skills (from running instance)
@@ -808,14 +826,18 @@ Usage:
 
 Starts the event loop in the foreground. Handles SIGINT and SIGTERM for graceful shutdown. If no config path is given, uses the default resolution order (project-level, then user-level).
 
-### `homarus init`
+### `homarus init [--no-wizard]`
 
-Creates the `~/.homarus/` directory structure and a default `config.json` with:
-- Anthropic as the default provider (using `${ANTHROPIC_API_KEY}`)
-- Model aliases: smart (Opus), fast (Haiku)
-- Ollama `nomic-embed-text` for embeddings
-- CLI channel enabled
-- Default agent limits (5 concurrent, 300s timeout, 20 turns)
+Launches an interactive setup wizard that walks you through:
+
+1. **Provider selection** — Anthropic, OpenAI, OpenRouter, or Ollama
+2. **API key entry** — masked input, saved to `~/.homarus/.env` (mode `600`)
+3. **Default model** — provider-specific model options
+4. **Telegram setup** (optional) — bot token, DM policy, group policy
+
+The wizard generates `config.json` with `${VAR_NAME}` references and writes actual secrets to `.env`. Your config is ready to use immediately after init.
+
+**`--no-wizard`** skips the wizard and generates a default config (Anthropic provider, CLI channel only) for manual editing. The wizard is also skipped automatically when stdin is not a TTY (e.g., piped input, CI/CD).
 
 Also creates starter `soul.md` and `user.md` files.
 

@@ -33,11 +33,15 @@ npx homarus start
 ## Quick start
 
 ```bash
-homarus init        # Create ~/.homarus/ with default config
+homarus init        # Interactive wizard: pick provider, enter API key, configure Telegram
 homarus start       # Start the event loop
 ```
 
-Edit `~/.homarus/config.json` to add your API keys and configure models, channels, and skills. See the **[Setup & Usage Guide](docs/guide.md)** for detailed configuration, Telegram setup, and more.
+The setup wizard walks you through provider selection (Anthropic, OpenAI, OpenRouter, or Ollama), API key entry, default model choice, and optional Telegram bot setup. Your config is ready to use immediately — no manual JSON editing required.
+
+Use `--no-wizard` to skip the wizard and generate a default config for manual editing.
+
+See the **[Setup & Usage Guide](docs/guide.md)** for detailed configuration and more.
 
 ## Architecture
 
@@ -58,7 +62,7 @@ Edit `~/.homarus/config.json` to add your API keys and configure models, channel
 
 ```
 homarus start [config]      Start the event loop (foreground)
-homarus init                Create default config and directories
+homarus init [--no-wizard]  Interactive setup wizard (or defaults)
 homarus status [port]       Show status of running instance
 homarus config [config]     Validate config file
 homarus skills              List loaded skills
@@ -103,7 +107,7 @@ Core architecture implemented (19 source files, 70 requirements, 20 CRC cards, 7
 
 - [ ] npm publish + SEA binaries + Homebrew tap
 - [ ] OAuth support for Google/Gemini (the only major provider with third-party OAuth)
-- [ ] `homarus auth` onboarding command (guided API key setup)
+- [x] ~~`homarus auth` onboarding command~~ (shipped as interactive `homarus init` wizard)
 
 ## License
 
