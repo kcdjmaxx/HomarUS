@@ -1,6 +1,6 @@
 // CRC: crc-Homarus.md | Seq: seq-startup.md, seq-message-dispatch.md, seq-shutdown.md
 import { v4 as uuid } from "uuid";
-import type { Event, AgentConfig, ConfigData, Logger, MessagePayload } from "./types.js";
+import type { Event, AgentConfig, AgentResult, ConfigData, Logger, MessagePayload } from "./types.js";
 import { Config } from "./config.js";
 import { EventBus } from "./event-bus.js";
 import { EventQueue } from "./event-queue.js";
@@ -288,6 +288,31 @@ export class Homarus {
     this.registerAgentHandler("message", {}, (event) => {
       const payload = event.payload as MessagePayload;
       return payload.text;
+    });
+
+    // Route agent results back to the originating channel
+    this.registerHandler("agent_complete", async (event) => {
+      const payload = event.payload as {
+        agentId: string;
+        result?: AgentResult;
+        state: string;
+      };
+      if (!payload.result?.output) return;
+
+      // replyTo format: "channel:<name>" with optional ":<target>" for chat IDs
+      const replyTo = event.replyTo ?? "";
+      if (!replyTo.startsWith("channel:")) return;
+
+      const parts = replyTo.substring("channel:".length);
+      const colonIdx = parts.indexOf(":");
+      const channelName = colonIdx > 0 ? parts.substring(0, colonIdx) : parts;
+      const target = colonIdx > 0 ? parts.substring(colonIdx + 1) : "";
+
+      try {
+        await this.channelManager.send(channelName, target, { text: payload.result.output });
+      } catch (err) {
+        this.logger.error("Failed to send agent reply", { channel: channelName, error: String(err) });
+      }
     });
   }
 

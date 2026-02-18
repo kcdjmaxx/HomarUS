@@ -212,6 +212,7 @@ export class Agent {
       type: "agent_complete",
       source: `agent:${this.id}`,
       timestamp: Date.now(),
+      replyTo: this.config.replyTo,
       payload: { agentId: this.id, result: this.result, state: this.state },
     });
   }

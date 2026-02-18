@@ -103,9 +103,17 @@ export class OpenAICompatibleProvider extends ModelProvider {
     return true;
   }
 
+  private stripProviderPrefix(model: string): string {
+    // "openrouter/anthropic/claude-sonnet-4-5" → "anthropic/claude-sonnet-4-5"
+    if (model.startsWith(this.id + "/")) {
+      return model.substring(this.id.length + 1);
+    }
+    return model;
+  }
+
   private buildRequestBody(request: ChatRequest): Record<string, unknown> {
     const body: Record<string, unknown> = {
-      model: request.model,
+      model: this.stripProviderPrefix(request.model),
       messages: request.messages.map((m) => {
         const msg: Record<string, unknown> = { role: m.role, content: m.content };
         if (m.toolCallId) msg.tool_call_id = m.toolCallId;
