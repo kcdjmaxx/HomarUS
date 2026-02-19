@@ -164,8 +164,10 @@ export class AgentManager {
     this.agents.delete(agentId);
     this.logger.info("Agent complete", {
       id: agentId,
+      state: result.state,
       toolCalls: result.toolCalls.length,
       tokens: result.usage.inputTokens + result.usage.outputTokens,
+      output: result.output.slice(0, 200) || "(empty)",
     });
   }
 }

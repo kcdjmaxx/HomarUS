@@ -75,6 +75,9 @@ export class Agent {
       ? tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }))
       : undefined;
 
+    const maxConsecutiveErrors = this.config.maxConsecutiveErrors ?? 3;
+    let consecutiveErrors = 0;
+
     try {
       while (this.turns < maxTurns && !this.cancelled) {
         if (this.isTimedOut()) {
@@ -118,6 +121,7 @@ export class Agent {
         });
 
         // Execute tool calls
+        let turnHadError = false;
         for (const tc of pendingToolCalls) {
           if (this.cancelled) break;
           const start = Date.now();
@@ -146,6 +150,46 @@ export class Agent {
             content: result.error ?? result.output,
             toolCallId: tc.id,
           });
+
+          if (result.error) {
+            turnHadError = true;
+          } else {
+            consecutiveErrors = 0;
+          }
+        }
+
+        if (turnHadError) {
+          consecutiveErrors++;
+        }
+
+        // Circuit breaker: stop if too many consecutive errors
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          this.logger.warn("Circuit breaker tripped", {
+            id: this.id,
+            consecutiveErrors,
+            threshold: maxConsecutiveErrors,
+          });
+          messages.push({
+            role: "system",
+            content: `Tool calls have failed ${consecutiveErrors} times consecutively. Stop calling tools and explain to the user what went wrong and what you cannot do.`,
+          });
+          // Let the model produce a final response without tools
+          let finalContent = "";
+          for await (const chunk of this.modelRouter.chat({
+            model: this.modelRouter.resolve(this.config.model),
+            messages,
+            maxTokens: 4096,
+          })) {
+            if (chunk.content) finalContent += chunk.content;
+            if (chunk.usage) {
+              this.totalUsage.inputTokens += chunk.usage.inputTokens;
+              this.totalUsage.outputTokens += chunk.usage.outputTokens;
+            }
+          }
+          this.state = "failed";
+          this.result = this.buildResult(finalContent || "Agent stopped: repeated tool failures");
+          this.emitResult();
+          return this.result;
         }
 
         this.emitProgress(`turn ${this.turns}/${maxTurns}`);
@@ -156,7 +200,7 @@ export class Agent {
         this.state = "cancelled";
         this.result = this.buildResult("Agent cancelled");
       } else {
-        this.state = "complete";
+        this.state = "failed";
         this.result = this.buildResult("Agent reached max turns");
       }
       this.emitResult();
@@ -189,6 +233,7 @@ export class Agent {
   private buildResult(output: string): AgentResult {
     return {
       output,
+      state: this.state,
       toolCalls: [...this.toolCallLog],
       usage: { ...this.totalUsage },
     };

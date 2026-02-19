@@ -4,6 +4,21 @@ import type { ToolDefinition, ToolContext, ToolResult } from "../types.js";
 
 const MAX_OUTPUT = 50_000; // chars
 
+// Dangerous patterns that are always blocked
+const BLOCKED_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\brm\s+(-[a-zA-Z]*f|-[a-zA-Z]*r|--force|--recursive).*\//, label: "rm -rf /" },
+  { pattern: /\bsudo\b/, label: "sudo" },
+  { pattern: /\bmkfs\b/, label: "mkfs" },
+  { pattern: /\bdd\s+.*of=\/dev\//, label: "dd to device" },
+  { pattern: />\s*\/dev\/sd/, label: "redirect to disk device" },
+  { pattern: /\bchmod\s+777\b/, label: "chmod 777" },
+  { pattern: /\bcurl\b.*\|\s*(ba)?sh/, label: "curl pipe to shell" },
+  { pattern: /\bwget\b.*\|\s*(ba)?sh/, label: "wget pipe to shell" },
+  { pattern: /\b(shutdown|reboot|halt|poweroff)\b/, label: "system control" },
+  { pattern: /\bkillall\b/, label: "killall" },
+  { pattern: /:\(\)\s*\{\s*:\|:&\s*\}\s*;:/, label: "fork bomb" },
+];
+
 interface BashParams {
   command: string;
   timeout?: number;
@@ -26,6 +41,13 @@ export const bashTool: ToolDefinition = {
 
   async execute(params: unknown, context: ToolContext): Promise<ToolResult> {
     const { command, timeout = 120_000, workingDir } = params as BashParams;
+
+    // Safety check — block dangerous patterns
+    for (const { pattern, label } of BLOCKED_PATTERNS) {
+      if (pattern.test(command)) {
+        return { output: "", error: `Blocked: command matches dangerous pattern (${label}). This restriction protects the host system.` };
+      }
+    }
 
     if (context.sandbox) {
       return { output: "", error: "bash tool is not available in sandbox mode" };

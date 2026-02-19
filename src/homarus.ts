@@ -146,6 +146,14 @@ export class Homarus {
     // 5c. Register built-in tools
     registerBuiltinTools(this.toolRegistry, this.memoryIndex, this.browserManager, this.logger);
 
+    // 5d. Load tool policies from config
+    if (configData.agents?.toolPolicies) {
+      for (const p of configData.agents.toolPolicies) {
+        this.toolRegistry.addPolicy(p);
+        this.logger.info("Loaded tool policy", { name: p.name });
+      }
+    }
+
     // 6. Skill manager
     this.skillManager = new SkillManager(
       this.logger,
@@ -297,7 +305,6 @@ export class Homarus {
         result?: AgentResult;
         state: string;
       };
-      if (!payload.result?.output) return;
 
       // replyTo format: "channel:<name>" with optional ":<target>" for chat IDs
       const replyTo = event.replyTo ?? "";
@@ -308,8 +315,18 @@ export class Homarus {
       const channelName = colonIdx > 0 ? parts.substring(0, colonIdx) : parts;
       const target = colonIdx > 0 ? parts.substring(colonIdx + 1) : "";
 
+      // Determine the reply text based on agent state
+      let text: string;
+      if (payload.state === "failed") {
+        text = "Something went wrong \u2014 I wasn't able to complete that request.";
+      } else if (!payload.result?.output?.trim()) {
+        text = "I completed the task but have nothing to report.";
+      } else {
+        text = payload.result.output;
+      }
+
       try {
-        await this.channelManager.send(channelName, target, { text: payload.result.output });
+        await this.channelManager.send(channelName, target, { text });
       } catch (err) {
         this.logger.error("Failed to send agent reply", { channel: channelName, error: String(err) });
       }

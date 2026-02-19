@@ -76,6 +76,10 @@ export class ToolRegistry {
       return { output: "", error: `Tool ${name} denied by policy` };
     }
 
+    if (params == null || typeof params !== "object" || Array.isArray(params)) {
+      return { output: "", error: `Tool ${name} requires an object parameter, got ${typeof params}` };
+    }
+
     const start = Date.now();
     try {
       const result = await tool.execute(params, context);
@@ -104,10 +108,24 @@ export class ToolRegistry {
   // CRC: crc-ToolRegistry.md — checkPolicy()
   checkPolicy(toolName: string, _context: ToolContext): boolean {
     for (const policy of this.policies) {
-      if (policy.deny?.includes(toolName)) return false;
-      if (policy.allow && !policy.allow.includes(toolName)) return false;
+      const denied = this.resolveNames(policy.deny ?? []);
+      if (denied.has(toolName)) return false;
+      if (policy.allow) {
+        const allowed = this.resolveNames(policy.allow);
+        if (!allowed.has(toolName)) return false;
+      }
     }
     return true;
+  }
+
+  private resolveNames(names: string[]): Set<string> {
+    const resolved = new Set<string>();
+    for (const name of names) {
+      const group = this.groups.get(name);
+      if (group) group.forEach((t) => resolved.add(t));
+      else resolved.add(name);
+    }
+    return resolved;
   }
 
   toSchemas(): Array<{ name: string; description: string; parameters: Record<string, unknown> }> {

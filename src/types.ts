@@ -48,6 +48,7 @@ export interface AgentConfig {
   tools?: string[];
   timeout?: number;
   maxTurns?: number;
+  maxConsecutiveErrors?: number;
   systemPrompt?: string;
   memory?: boolean;
   sandbox?: boolean;
@@ -61,6 +62,7 @@ export type AgentState = "pending" | "running" | "complete" | "failed" | "cancel
 
 export interface AgentResult {
   output: string;
+  state: AgentState;
   toolCalls: ToolCallRecord[];
   usage: TokenUsage;
 }
@@ -228,11 +230,18 @@ export interface ChannelConfig {
   [key: string]: unknown;
 }
 
+export interface ToolPolicyConfig {
+  name: string;
+  allow?: string[];
+  deny?: string[];
+}
+
 export interface AgentsConfig {
   maxConcurrent?: number;
   defaultTimeout?: number;
   defaultMaxTurns?: number;
   defaultExecutionStrategy?: ExecutionStrategyType;
+  toolPolicies?: ToolPolicyConfig[];
 }
 
 export interface MemoryConfig {
