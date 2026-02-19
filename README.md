@@ -78,6 +78,33 @@ Skills go in `~/.homarus/skills/` or `./skills/`.
 Identity files in `~/.homarus/identity/`.
 Memory index at `~/.homarus/memory/`.
 
+## Safety
+
+### Circuit breaker
+
+Agents stop automatically after 3 consecutive tool errors instead of looping until max turns. When tripped, the agent explains what went wrong and exits. Configurable via `maxConsecutiveErrors` in agent config.
+
+### Bash guardrails
+
+The bash tool blocks dangerous commands before execution: `rm -rf /`, `sudo`, `mkfs`, `dd` to device, `chmod 777`, `curl | sh`, `wget | sh`, `shutdown`/`reboot`/`halt`/`poweroff`, `killall`, and fork bombs.
+
+### Tool policies
+
+Define allow/deny rules in your config to restrict what tools agents can use:
+
+```json
+{
+  "agents": {
+    "toolPolicies": [
+      { "name": "no-bash", "deny": ["bash"] },
+      { "name": "read-only", "allow": ["group:fs", "group:web", "group:memory"] }
+    ]
+  }
+}
+```
+
+Groups (`group:fs`, `group:runtime`, `group:web`, `group:code`, `group:memory`) resolve to their member tools automatically.
+
 ## Built-in tools
 
 Agents get access to: `bash`, `read`, `write`, `edit`, `glob`, `grep`, `git`, `web_fetch`, `web_search`, `lsp`, `memory_search`, `memory_get`, `memory_store`, and optionally `browser`.
@@ -101,11 +128,12 @@ The `refs/`, `specs/`, and `design/` directories are the living design artifacts
 
 ## Status
 
-Core architecture implemented (19 source files, 70 requirements, 20 CRC cards, 7 sequence diagrams, 37 tests passing across 5 test suites). Built-in tool suite complete. Currently pre-release.
+Core architecture implemented (21 source files, 70 requirements, 20 CRC cards, 7 sequence diagrams, 51 tests passing across 5 test suites). Built-in tool suite complete with safety guardrails. Published on npm.
 
 ## Roadmap
 
-- [ ] npm publish + SEA binaries + Homebrew tap
+- [x] ~~npm publish~~ (live on npm as `homarus`)
+- [ ] SEA binaries + Homebrew tap
 - [ ] OAuth support for Google/Gemini (the only major provider with third-party OAuth)
 - [x] ~~`homarus auth` onboarding command~~ (shipped as interactive `homarus init` wizard)
 
