@@ -63,7 +63,7 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 
 ## Gaps
 
-- [x] D1: Test files implemented (30 tests passing)
+- [x] D1: Test files implemented (51 tests passing)
   - [x] test-Homarus.md → `src/homarus.test.ts`
   - [x] test-AgentManager.md → `src/agent-manager.test.ts`
   - [x] test-ModelRouter.md → `src/model-router.test.ts`
@@ -74,3 +74,11 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - [x] O4: Agent subprocess execution strategy implemented (`src/execution-strategy.ts`, `src/subprocess-strategy.ts`, `src/agent-worker.ts`)
 
 - [x] O5: BrowserManager mini-spec design complete (crc-BrowserManager.md, seq-browser-action.md, test-BrowserManager.md, browser-manager.test.ts)
+
+### v0.2.0 Additions (Feb 19, 2026)
+- Circuit breaker in agent loop — stops after N consecutive tool errors (default 3), configurable via `maxConsecutiveErrors`
+- Bash blocked patterns — 11 dangerous command patterns blocked before execution (rm -rf, sudo, curl|sh, etc.)
+- ToolPolicy group resolution — `checkPolicy()` now resolves group names (e.g. `"group:runtime"` → bash, git)
+- Tool policies loaded from config via `agents.toolPolicies` in `homarus.ts start()`
+- `ToolPolicyConfig` type added to `types.ts`, `AgentsConfig` extended with `toolPolicies`
+- 8 new tests: circuit breaker, bash patterns (4), tool policy with groups (4)
