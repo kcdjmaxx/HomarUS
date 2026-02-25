@@ -1,5 +1,7 @@
 // CRC: crc-McpTools.md | Seq: seq-mcp-tool-call.md
 // MCP tool definitions exposed to Claude Code via the backend HTTP API
+import { writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Homarus } from "./homarus.js";
 import type { TelegramChannelAdapter } from "./telegram-adapter.js";
 
@@ -280,6 +282,119 @@ export function createMcpTools(loop: Homarus): McpToolDef[] {
         `[${new Date(e.timestamp).toISOString()}] ${e.type} from ${e.source}: ${JSON.stringify(e.payload).slice(0, 500)}`
       ).join("\n");
       return { content: [{ type: "text", text: formatted }] };
+    },
+  });
+
+  // run_tool: execute registered tools (bash, read, write, etc.)
+  tools.push({
+    name: "run_tool",
+    description: "Execute any registered tool (bash, read, write, edit, glob, grep, git, web_fetch, web_search, memory_*)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Tool name to execute" },
+        params: { type: "object", description: "Tool parameters" },
+      },
+      required: ["name", "params"],
+    },
+    async handler(params) {
+      const { name, params: toolParams } = params as { name: string; params: Record<string, unknown> };
+      const tool = loop.getToolRegistry().get(name);
+      if (!tool) {
+        return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
+      }
+      try {
+        const result = await tool.execute(toolParams, { agentId: "mcp", sandbox: false, workingDir: process.cwd() });
+        return { content: [{ type: "text", text: typeof result.output === "string" ? result.output : JSON.stringify(result.output) }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Tool error: ${String(err)}` }], isError: true };
+      }
+    },
+  });
+
+  // nano_banana: AI image generation via Gemini 2.5 Flash Image
+  tools.push({
+    name: "nano_banana",
+    description: "Generate an image using Google's Gemini 2.5 Flash Image model (Nano Banana). Returns the file path of the generated image.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: { type: "string", description: "Text description of the image to generate" },
+        filename: { type: "string", description: "Output filename (default: auto-generated). Will be saved to ~/.homarus/images/" },
+      },
+      required: ["prompt"],
+    },
+    async handler(params) {
+      const { prompt, filename } = params as { prompt: string; filename?: string };
+      const apiKey = process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        return { content: [{ type: "text", text: "GOOGLE_API_KEY not set in .env" }], isError: true };
+      }
+
+      try {
+        const res = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent",
+          {
+            method: "POST",
+            headers: {
+              "x-goog-api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+            }),
+          },
+        );
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          return { content: [{ type: "text", text: `Gemini API error (${res.status}): ${errorText}` }], isError: true };
+        }
+
+        const data = await res.json() as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> };
+          }>;
+        };
+
+        const parts = data.candidates?.[0]?.content?.parts;
+        if (!parts) {
+          return { content: [{ type: "text", text: "No content in response" }], isError: true };
+        }
+
+        // Find the image part
+        const imagePart = parts.find(p => p.inlineData);
+        const textPart = parts.find(p => p.text);
+
+        if (!imagePart?.inlineData) {
+          const textOnly = textPart?.text ?? "No image generated";
+          return { content: [{ type: "text", text: `Model returned text only: ${textOnly}` }] };
+        }
+
+        // Save the image
+        const home = process.env.HOME ?? ".";
+        const imagesDir = resolve(home, ".homarus", "images");
+        if (!existsSync(imagesDir)) {
+          mkdirSync(imagesDir, { recursive: true });
+        }
+
+        const ext = imagePart.inlineData.mimeType === "image/png" ? "png" : "jpg";
+        const outName = filename ?? `nano-banana-${Date.now()}.${ext}`;
+        const outPath = resolve(imagesDir, outName);
+
+        const imageBuffer = Buffer.from(imagePart.inlineData.data, "base64");
+        writeFileSync(outPath, imageBuffer);
+
+        let response = `Image saved to: ${outPath}`;
+        if (textPart?.text) {
+          response += `\n\nModel notes: ${textPart.text}`;
+        }
+
+        return { content: [{ type: "text", text: response }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${String(err)}` }], isError: true };
+      }
     },
   });
 
