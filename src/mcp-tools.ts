@@ -120,6 +120,34 @@ export function createMcpTools(loop: Homarus): McpToolDef[] {
     },
   });
 
+  // telegram_send_photo
+  tools.push({
+    name: "telegram_send_photo",
+    description: "Send a photo to a Telegram chat from a local file path.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chatId: { type: "string", description: "Telegram chat ID" },
+        filePath: { type: "string", description: "Absolute path to the image file" },
+        caption: { type: "string", description: "Optional caption for the photo" },
+      },
+      required: ["chatId", "filePath"],
+    },
+    async handler(params) {
+      const { chatId, filePath, caption } = params as { chatId: string; filePath: string; caption?: string };
+      const adapter = loop.getChannelManager().getAdapter("telegram") as TelegramChannelAdapter | undefined;
+      if (!adapter) {
+        return { content: [{ type: "text", text: "Telegram not configured" }] };
+      }
+      try {
+        await adapter.sendPhoto(chatId, filePath, caption);
+        return { content: [{ type: "text", text: `Photo sent to chat ${chatId}` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${String(err)}` }], isError: true };
+      }
+    },
+  });
+
   // R83: memory_search
   tools.push({
     name: "memory_search",

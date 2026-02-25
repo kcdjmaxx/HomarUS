@@ -165,6 +165,25 @@ export class TelegramChannelAdapter extends ChannelAdapter {
     return this.recentMessages.slice(-limit);
   }
 
+  async sendPhoto(chatId: string, filePath: string, caption?: string): Promise<void> {
+    const { readFileSync } = await import("node:fs");
+    const { basename } = await import("node:path");
+    const fileData = readFileSync(filePath);
+    const fileName = basename(filePath);
+
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    form.append("photo", new Blob([fileData]), fileName);
+    if (caption) form.append("caption", caption);
+
+    const url = `${BASE_URL}${this.token}/sendPhoto`;
+    const res = await fetch(url, { method: "POST", body: form });
+    const json = (await res.json()) as TelegramResponse<unknown>;
+    if (!json.ok) {
+      throw new Error(`Telegram API error (sendPhoto): ${json.description ?? "unknown"}`);
+    }
+  }
+
   // --- Polling ---
 
   private schedulePoll(): void {
