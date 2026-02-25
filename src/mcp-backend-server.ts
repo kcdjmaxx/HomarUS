@@ -15,6 +15,7 @@ export class McpBackendServer {
   private loop: Homarus;
   private mcpTools: McpToolDef[];
   private mcpResources: McpResourceDef[];
+  private checkpoint: Record<string, unknown> | null = null;
 
   constructor(logger: Logger, port: number, loop: Homarus) {
     this.logger = logger;
@@ -149,6 +150,74 @@ export class McpBackendServer {
       } catch {
         res.status(204).end();
       }
+    });
+
+    // Agent registry endpoints (for Claude Code background agent dispatch)
+    this.app.get("/api/agents", (_req, res) => {
+      const registry = this.loop.getAgentRegistry();
+      res.json({
+        agents: registry.getAll(),
+        availableSlots: registry.getAvailableSlots(),
+        activeCount: registry.getActiveCount(),
+      });
+    });
+
+    this.app.post("/api/agents", (req, res) => {
+      const { id, description } = req.body as { id: string; description: string };
+      if (!id || !description) {
+        res.status(400).json({ error: "id and description required" });
+        return;
+      }
+      const registry = this.loop.getAgentRegistry();
+      const ok = registry.register(id, description);
+      if (!ok) {
+        res.status(429).json({ error: "No available slots" });
+        return;
+      }
+      res.json({ ok: true, id });
+    });
+
+    this.app.post("/api/agents/:id/complete", (req, res) => {
+      const { id } = req.params;
+      const { result } = req.body as { result?: string };
+      this.loop.getAgentRegistry().complete(id, result ?? "");
+      res.json({ ok: true });
+    });
+
+    this.app.post("/api/agents/:id/fail", (req, res) => {
+      const { id } = req.params;
+      const { error } = req.body as { error?: string };
+      this.loop.getAgentRegistry().fail(id, error ?? "Unknown error");
+      res.json({ ok: true });
+    });
+
+    this.app.delete("/api/agents/:id", (req, res) => {
+      const { id } = req.params;
+      this.loop.getAgentRegistry().cleanup(id);
+      res.json({ ok: true });
+    });
+
+    // Session checkpoint endpoints
+    this.app.get("/api/checkpoint", (_req, res) => {
+      // Return current checkpoint if stored
+      res.json(this.checkpoint ?? { currentTopic: null, recentMessages: [] });
+    });
+
+    this.app.post("/api/checkpoint", (req, res) => {
+      this.checkpoint = req.body;
+      res.json({ ok: true });
+    });
+
+    this.app.delete("/api/checkpoint", (_req, res) => {
+      this.checkpoint = null;
+      res.json({ ok: true });
+    });
+
+    // Pre-compact hook endpoint
+    this.app.post("/api/pre-compact", (_req, res) => {
+      // Save checkpoint before compaction
+      this.logger.info("Pre-compact hook triggered");
+      res.json({ ok: true, checkpoint: this.checkpoint });
     });
 
     // Identity endpoints (convenience, used by resources too)

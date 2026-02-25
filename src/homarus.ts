@@ -17,6 +17,7 @@ import { OpenAICompatibleProvider, AnthropicProvider } from "./model-provider.js
 import { BrowserManager } from "./browser-manager.js";
 import { createEmbeddingProvider } from "./embedding-provider.js";
 import { registerBuiltinTools } from "./tools/index.js";
+import { AgentRegistry } from "./agent-registry.js";
 
 export type LoopState = "starting" | "running" | "stopping" | "stopped";
 
@@ -35,6 +36,7 @@ export class Homarus {
   private timerService!: TimerService;
   private httpApi!: HttpApi;
   private browserManager: BrowserManager | null = null;
+  private agentRegistry!: AgentRegistry;
   private logger: Logger;
   private processing = false;
   private processInterval: ReturnType<typeof setInterval> | null = null;
@@ -85,6 +87,10 @@ export class Homarus {
 
   getToolRegistry(): ToolRegistry {
     return this.toolRegistry;
+  }
+
+  getAgentRegistry(): AgentRegistry {
+    return this.agentRegistry;
   }
 
   // R104: Event history
@@ -207,6 +213,11 @@ export class Homarus {
     );
     this.agentManager.setEmitter((e) => this.emit(e));
 
+    // 4b. Agent registry (for MCP-spawned background agents)
+    const maxMcpAgents = configData.agents?.maxConcurrent ?? 3;
+    this.agentRegistry = new AgentRegistry(this.logger, maxMcpAgents);
+    this.agentRegistry.setEmitter((e) => this.emit(e));
+
     // 5. Memory
     const home = process.env.HOME ?? ".";
     const memoryConfig = configData.memory;
@@ -310,6 +321,7 @@ export class Homarus {
     this.eventWaiters.clear();
     this.config.stopWatching();
     this.timerService.stop();
+    this.agentRegistry.stop();
     this.agentManager.cancelAll();
     await this.agentManager.waitForAll(10_000);
     await this.channelManager.disconnectAll();

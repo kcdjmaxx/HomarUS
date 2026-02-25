@@ -102,6 +102,68 @@ Store user-learning memories under these prefixes:
 | `local/user/corrections/` | Things the user explicitly corrected | `local/user/corrections/no-emojis` |
 | `local/user/context/` | Background facts about the user | `local/user/context/projects` |
 
+## Agent Dispatcher (for heavy tasks)
+
+When a message or timer requires significant work (research, multi-step workflows, file-heavy operations), **dispatch it to a background agent** instead of doing it inline:
+
+**Dispatch heuristics:**
+- **Inline**: Quick responses, simple lookups, memory searches, short messages — handle directly
+- **Dispatch**: Research tasks (web search + synthesis), reading/processing multiple files, any task that would take more than 2-3 tool calls
+
+**How to dispatch:**
+
+1. Check available slots:
+```bash
+curl -s http://127.0.0.1:18801/api/agents
+```
+Only dispatch if `availableSlots > 0`.
+
+2. Register the agent with the backend:
+```bash
+curl -s -X POST http://127.0.0.1:18801/api/agents \
+  -H "Content-Type: application/json" \
+  -d '{"id":"<task_id>","description":"<what the agent is doing>"}'
+```
+
+3. Spawn the Task agent in background:
+```
+Task tool: run_in_background=true, subagent_type="general-purpose", prompt="<detailed task>"
+```
+
+4. Tell the user: "Working on that in the background — I'll send the results when it's done."
+
+5. Restart the event loop immediately — stay responsive.
+
+**When an agent_completed event arrives:**
+1. Read the result from the event payload
+2. Summarize and send to the user via Telegram or dashboard
+3. Clean up: `curl -s -X DELETE http://127.0.0.1:18801/api/agents/<task_id>`
+
+**Agent prompts should include:**
+- The specific task with all necessary context
+- Relevant memory search results (pre-fetch before spawning)
+- File paths to read
+- **Completion callback instruction:** At the end of the prompt, include:
+  ```
+  When you are completely done, call this to notify the system:
+  curl -s -X POST http://127.0.0.1:18801/api/agents/<task_id>/complete \
+    -H "Content-Type: application/json" \
+    -d '{"result":"<one-line summary of what you produced>"}'
+  ```
+- Instruction to write results clearly — the main loop will summarize them
+
+### Session Checkpoint
+
+After handling each event, update the session checkpoint:
+
+```bash
+curl -s -X POST http://127.0.0.1:18801/api/checkpoint \
+  -H "Content-Type: application/json" \
+  -d '{"currentTopic":"what we are working on","recentMessages":["summary of last exchange"]}'
+```
+
+Keep it lightweight — just the topic and latest message summary.
+
 ## Architecture Convention
 
 **Apps talk to HomarUS directly; Claude only wakes for reasoning.**
