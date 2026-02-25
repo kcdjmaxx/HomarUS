@@ -5,12 +5,14 @@
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
-    "homarus": "dist/cli.js"
+    "homarus": "dist/cli.js",
+    "homarus-mcp": "dist/mcp-proxy.js"
   },
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
     "!dist/**/*.test.*",
+    "bin/event-loop",
     "README.md",
     "LICENSE"
   ],
@@ -44,6 +46,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "ajv": "^8.17.0",
     "better-sqlite3": "^11.7.0",
     "croner": "^9.0.0",

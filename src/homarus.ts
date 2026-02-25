@@ -1,4 +1,4 @@
-// CRC: crc-Homarus.md | Seq: seq-startup.md, seq-message-dispatch.md, seq-shutdown.md
+// CRC: crc-Homarus.md | Seq: seq-startup.md, seq-message-dispatch.md, seq-shutdown.md, seq-mcp-event-wait.md
 import { v4 as uuid } from "uuid";
 import type { Event, AgentConfig, AgentResult, ConfigData, Logger, MessagePayload } from "./types.js";
 import { Config } from "./config.js";
@@ -38,6 +38,14 @@ export class Homarus {
   private logger: Logger;
   private processing = false;
   private processInterval: ReturnType<typeof setInterval> | null = null;
+  // R104: Event history buffer for MCP tools and resources
+  private eventHistory: Event[] = [];
+  private maxEventHistory = 100;
+  // R105, R106: Long-poll support for MCP event loop
+  private eventWaiters: Set<{ resolve: (events: Event[]) => void; since: number }> = new Set();
+  private deliveryWatermark = 0;
+  // R108: Notification callback for broadcasting events to MCP proxy
+  private notifyFn: ((event: Event) => void) | null = null;
 
   constructor(logger: Logger, configPath?: string) {
     this.logger = logger;
@@ -54,9 +62,97 @@ export class Homarus {
     return this.state;
   }
 
+  // R107: Getters for MCP tools/resources
+  getConfig(): Config {
+    return this.config;
+  }
+
+  getChannelManager(): ChannelManager {
+    return this.channelManager;
+  }
+
+  getMemoryIndex(): MemoryIndex {
+    return this.memoryIndex;
+  }
+
+  getIdentityManager(): IdentityManager {
+    return this.identityManager;
+  }
+
+  getTimerService(): TimerService {
+    return this.timerService;
+  }
+
+  getToolRegistry(): ToolRegistry {
+    return this.toolRegistry;
+  }
+
+  // R104: Event history
+  getEventHistory(): Event[] {
+    return this.eventHistory;
+  }
+
+  // R108: Set notification callback for MCP proxy
+  setNotifyFn(fn: (event: Event) => void): void {
+    this.notifyFn = fn;
+  }
+
   // CRC: crc-Homarus.md — emit()
   emit(event: Event): void {
     this.eventQueue.enqueue(event);
+    // R104: Store in event history
+    this.eventHistory.push(event);
+    if (this.eventHistory.length > this.maxEventHistory) {
+      this.eventHistory.shift();
+    }
+    // R105: Signal any blocked waitForEvent callers
+    for (const waiter of this.eventWaiters) {
+      waiter.resolve(this.getEventsSince(waiter.since));
+      this.eventWaiters.delete(waiter);
+    }
+    // R108: Notify MCP proxy
+    this.notifyFn?.(event);
+  }
+
+  // R105, R106: Long-poll for events — blocks until events arrive or timeout
+  waitForEvent(timeoutMs = 30000, since?: number): Promise<Event[]> {
+    const cursor = since ?? (this.deliveryWatermark || Date.now());
+    const pending = this.getEventsSince(cursor);
+    if (pending.length > 0) {
+      this.advanceWatermark(pending);
+      return Promise.resolve(pending);
+    }
+    return new Promise((resolve) => {
+      const waiter = {
+        resolve: (events: Event[]) => {
+          this.advanceWatermark(events);
+          resolve(events);
+        },
+        since: cursor,
+      };
+      this.eventWaiters.add(waiter);
+      setTimeout(() => {
+        this.eventWaiters.delete(waiter);
+        resolve([]);
+      }, Math.min(timeoutMs, 120000));
+    });
+  }
+
+  // R106: Delivery watermark
+  getDeliveryWatermark(): number {
+    return this.deliveryWatermark;
+  }
+
+  private advanceWatermark(events: Event[]): void {
+    if (events.length === 0) return;
+    const maxTs = Math.max(...events.map(e => e.timestamp));
+    if (maxTs > this.deliveryWatermark) {
+      this.deliveryWatermark = maxTs;
+    }
+  }
+
+  private getEventsSince(since: number): Event[] {
+    return this.eventHistory.filter(e => e.timestamp > since);
   }
 
   // CRC: crc-Homarus.md — registerHandler()
@@ -207,6 +303,11 @@ export class Homarus {
     this.logger.info("Event loop stopping...");
 
     this.stopProcessing();
+    // Resolve any blocked waitForEvent callers
+    for (const waiter of this.eventWaiters) {
+      waiter.resolve([]);
+    }
+    this.eventWaiters.clear();
     this.config.stopWatching();
     this.timerService.stop();
     this.agentManager.cancelAll();
@@ -355,7 +456,7 @@ export class Homarus {
     }
   }
 
-  private getStatus(): Record<string, unknown> {
+  getStatus(): Record<string, unknown> {
     return {
       state: this.state,
       agents: {

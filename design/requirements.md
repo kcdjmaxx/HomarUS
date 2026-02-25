@@ -105,3 +105,56 @@
 - **R68:** The system shall provide a CLI with commands: init, start, stop, status, config validate, skill list, skill add
 - **R69:** (inferred) The system shall provide a local HTTP API for status, health checks, and programmatic control
 - **R70:** (inferred) The system shall support running as a daemon via systemd (Linux) or launchd (macOS)
+
+## Feature: MCP Layer
+**Source:** specs/mcp-layer.md
+
+### Two-Process Architecture
+- **R71:** The system shall provide an MCP proxy (`mcp-proxy.ts`) that speaks MCP stdio protocol to Claude Code and never restarts during a session
+- **R72:** The proxy shall spawn and manage a backend process as a child, forwarding MCP tool calls and resource reads over HTTP
+- **R73:** The backend (`backend.ts`) shall run the existing Homarus event loop plus an HTTP API for the proxy
+- **R74:** A `restart_backend` MCP tool shall live in the proxy itself, allowing the backend to be restarted without dropping the MCP connection
+- **R75:** The backend HTTP API shall expose: `/api/health`, `/api/tool-list`, `/api/tool-call`, `/api/resource-list`, `/api/resource`, `/api/wait`
+- **R76:** The proxy shall wait up to 30 seconds for the backend to become healthy after spawning
+- **R77:** The proxy shall gracefully stop the backend on SIGINT/SIGTERM
+- **R78:** The existing `homarus start` standalone mode shall continue working unchanged
+
+### MCP Tools
+- **R79:** The system shall expose `telegram_send` as an MCP tool (send message to Telegram chat by chatId)
+- **R80:** The system shall expose `telegram_read` as an MCP tool (read recent incoming messages with configurable limit)
+- **R81:** The system shall expose `telegram_typing` as an MCP tool (send typing indicator to a chat)
+- **R82:** The system shall expose `telegram_react` as an MCP tool (react to a message with emoji)
+- **R83:** The system shall expose `memory_search` as an MCP tool (hybrid vector + FTS search)
+- **R84:** The system shall expose `memory_store` as an MCP tool (store and index content by key)
+- **R85:** The system shall expose `timer_schedule` as an MCP tool (cron, interval, or one-shot)
+- **R86:** The system shall expose `timer_cancel` as an MCP tool
+- **R87:** The system shall expose `get_status` as an MCP tool (system status)
+- **R88:** The system shall expose `get_events` as an MCP tool (recent event history)
+- **R89:** The system shall expose `wait_for_event` as an MCP tool (long-poll up to 120s)
+- **R90:** The system shall expose `dashboard_send` as an MCP tool (send to dashboard channel if present)
+- **R91:** All MCP tool handlers shall return `{ content: [{ type: "text", text }] }` format
+
+### MCP Resources
+- **R92:** The system shall expose `identity://soul` as an MCP resource (soul.md content)
+- **R93:** The system shall expose `identity://user` as an MCP resource (user.md content)
+- **R94:** The system shall expose `config://current` as an MCP resource (config JSON with secrets redacted)
+- **R95:** The system shall expose `events://recent` as an MCP resource (last 20 events)
+
+### Event Loop Script
+- **R96:** The system shall provide a bash script `bin/event-loop` that long-polls `/api/wait`
+- **R97:** The event loop script shall block at OS level, consuming zero Claude Code tokens while idle
+- **R98:** On timeout (204), the script shall loop silently; on events (200), it shall print JSON and exit
+- **R99:** The script shall use a PID file to prevent duplicate listeners
+
+### Telegram Enhancements
+- **R100:** The TelegramChannelAdapter shall support `sendTyping(chatId)` method
+- **R101:** The TelegramChannelAdapter shall support `setReaction(chatId, messageId, emoji)` method
+- **R102:** The TelegramChannelAdapter shall maintain a recent message buffer (50 messages) accessible via `getRecentMessages(limit)`
+- **R103:** The adapter shall auto-send a typing indicator on message receipt
+
+### Event History and Long-Poll
+- **R104:** Homarus shall maintain an event history buffer (last 100 events)
+- **R105:** Homarus shall support a `waitForEvent(timeoutMs, since?)` method that blocks until events arrive or timeout
+- **R106:** Homarus shall track a delivery watermark to prevent replaying old events
+- **R107:** Homarus shall expose getter methods for subsystems used by MCP tools (getChannelManager, getMemoryIndex, getTimerService, getIdentityManager, getConfig, getEventHistory)
+- **R108:** Homarus shall support a `setNotifyFn()` callback for broadcasting events to external consumers

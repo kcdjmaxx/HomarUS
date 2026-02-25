@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# R96-R99: Zero-token event loop for HomarUS
+# Long-polls the MCP backend HTTP API -- blocks at OS level, zero Claude tokens while idle.
+# Returns to Claude only when real events arrive.
+#
+# The server maintains a delivery watermark -- events already delivered via /api/wait
+# are never re-delivered. This survives context compaction without client-side state.
+
+set -euo pipefail
+
+# Read MCP backend port from config or env, default 18801
+CONFIG="$HOME/.homarus/config.json"
+if [[ -n "${HOMARUS_MCP_PORT:-}" ]]; then
+  PORT="$HOMARUS_MCP_PORT"
+elif [[ -f "$CONFIG" ]] && command -v jq &>/dev/null; then
+  PORT=$(jq -r '.mcp.port // 18801' "$CONFIG" 2>/dev/null || echo 18801)
+else
+  PORT=18801
+fi
+
+BASE="http://127.0.0.1:${PORT}"
+TIMEOUT=120
+
+# R99: Prevent duplicate listeners
+PIDFILE="/tmp/homarus-event-loop.pid"
+if [[ -f "$PIDFILE" ]]; then
+  OLD_PID=$(cat "$PIDFILE" 2>/dev/null || true)
+  if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Killing previous event-loop (PID $OLD_PID)"
+    kill "$OLD_PID" 2>/dev/null || true
+    sleep 0.5
+  fi
+fi
+echo $$ > "$PIDFILE"
+trap 'rm -f "$PIDFILE"' EXIT
+
+# R97, R98: Long-poll loop
+while true; do
+  HTTP_CODE=$(curl -s -o /tmp/homarus-wait-response.json -w "%{http_code}" \
+    "${BASE}/api/wait?timeout=${TIMEOUT}" 2>/dev/null) || {
+    echo "ERROR: curl failed -- is the HomarUS MCP backend running on port ${PORT}?"
+    exit 1
+  }
+
+  case "$HTTP_CODE" in
+    204)
+      # Timeout, no events -- loop again (zero tokens)
+      continue
+      ;;
+    200)
+      # Events arrived -- print and return to Claude
+      cat /tmp/homarus-wait-response.json
+      echo ""
+      echo "---"
+      echo "Event loop paused. Handle the events above, then restart: bash \"\$PWD/bin/event-loop\""
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unexpected HTTP ${HTTP_CODE} from /api/wait"
+      exit 1
+      ;;
+  esac
+done

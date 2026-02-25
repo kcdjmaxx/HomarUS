@@ -54,6 +54,18 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - [x] seq-shutdown.md → `src/homarus.ts`, `src/agent-manager.ts`
 - [x] seq-browser-action.md → `src/browser-manager.ts`, `src/tools/browser.ts`
 
+### MCP CRC Cards
+- [x] crc-McpProxy.md → `src/mcp-proxy.ts`
+- [x] crc-McpBackend.md → `src/mcp-backend.ts`
+- [x] crc-McpBackendServer.md → `src/mcp-backend-server.ts`
+- [x] crc-McpTools.md → `src/mcp-tools.ts`
+- [x] crc-McpResources.md → `src/mcp-resources.ts`
+
+### MCP Sequences
+- [x] seq-mcp-startup.md → `src/mcp-proxy.ts`, `src/mcp-backend.ts`
+- [x] seq-mcp-tool-call.md → `src/mcp-proxy.ts`, `src/mcp-backend-server.ts`, `src/mcp-tools.ts`
+- [x] seq-mcp-event-wait.md → `src/mcp-backend-server.ts`, `src/homarus.ts`, `bin/event-loop`
+
 ### Test Designs
 - [x] test-Homarus.md → `src/homarus.test.ts`
 - [x] test-AgentManager.md → `src/agent-manager.test.ts`
@@ -82,3 +94,12 @@ If a subsystem fails to start (e.g., a channel adapter can't connect), the syste
 - Tool policies loaded from config via `agents.toolPolicies` in `homarus.ts start()`
 - `ToolPolicyConfig` type added to `types.ts`, `AgentsConfig` extended with `toolPolicies`
 - 8 new tests: circuit breaker, bash patterns (4), tool policy with groups (4)
+
+### v0.3.0 MCP Layer (Feb 24, 2026)
+- [x] O6: MCP two-process architecture (mcp-proxy.ts + mcp-backend.ts)
+- [x] O7: MCP tools: telegram_send/read/typing/react, memory_search/store, timer_schedule/cancel, get_status, get_events, wait_for_event, dashboard_send
+- [x] O8: MCP resources: identity://soul, identity://user, config://current, events://recent
+- [x] O9: Telegram enhancements: sendTyping, setReaction, getRecentMessages, auto-typing, message buffer
+- [x] O10: Event history buffer (100), waitForEvent long-poll, delivery watermark
+- [x] O11: bin/event-loop bash script (zero-token long-poll)
+- [ ] O12: MCP-specific test coverage (tool handlers, resource handlers, event wait)

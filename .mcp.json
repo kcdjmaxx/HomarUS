@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "homarus": {
+      "command": "node",
+      "args": ["/Users/maxross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Kcdjmaxx Main Vault/ClawdBot/homarus/dist/mcp-proxy.js"]
+    }
+  }
+}

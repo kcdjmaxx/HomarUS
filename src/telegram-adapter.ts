@@ -70,6 +70,9 @@ export class TelegramChannelAdapter extends ChannelAdapter {
   private backoffMs = INITIAL_BACKOFF;
   private pollingInterval: number;
   private allowedChatIds: Set<number>;
+  // R102: Recent message buffer for MCP telegram_read tool
+  private recentMessages: Array<{ from: string; text: string; chatId: string; timestamp: number }> = [];
+  private maxRecentMessages = 50;
 
   constructor(config: TelegramAdapterConfig, logger: Logger) {
     super("telegram", logger, config.dmPolicy ?? "open", config.groupPolicy ?? "mention_required");
@@ -143,6 +146,25 @@ export class TelegramChannelAdapter extends ChannelAdapter {
     };
   }
 
+  // R100: Send typing indicator
+  async sendTyping(chatId: string): Promise<void> {
+    await this.apiCall("sendChatAction", { chat_id: chatId, action: "typing" });
+  }
+
+  // R101: React to a message with emoji
+  async setReaction(chatId: string, messageId: number, emoji: string): Promise<void> {
+    await this.apiCall("setMessageReaction", {
+      chat_id: chatId,
+      message_id: messageId,
+      reaction: [{ type: "emoji", emoji }],
+    });
+  }
+
+  // R102: Get recent messages for MCP telegram_read tool
+  getRecentMessages(limit = 20): Array<{ from: string; text: string; chatId: string; timestamp: number }> {
+    return this.recentMessages.slice(-limit);
+  }
+
   // --- Polling ---
 
   private schedulePoll(): void {
@@ -197,11 +219,26 @@ export class TelegramChannelAdapter extends ChannelAdapter {
 
     const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
     const isMention = this.detectMention(msg);
+    const text = isMention ? this.stripMention(msg.text) : msg.text;
+
+    // R102: Store in recent message buffer
+    this.recentMessages.push({
+      from: msg.from?.username ?? String(msg.from?.id ?? "unknown"),
+      text,
+      chatId: String(msg.chat.id),
+      timestamp: Date.now(),
+    });
+    if (this.recentMessages.length > this.maxRecentMessages) {
+      this.recentMessages.shift();
+    }
+
+    // R103: Auto-send typing indicator on message receipt
+    this.sendTyping(String(msg.chat.id)).catch(() => {});
 
     this.deliverWithTarget({
       from: msg.from?.username ?? String(msg.from?.id ?? "unknown"),
       channel: "telegram",
-      text: isMention ? this.stripMention(msg.text) : msg.text,
+      text,
       isGroup,
       isMention,
       replyTo: String(msg.message_id),

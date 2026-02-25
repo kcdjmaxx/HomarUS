@@ -23,3 +23,43 @@
 - **Requirements:** R13, R20, R21, R23, R24, R26, R27, R51
 - **Status:** active
 - **Summary:** Bridge plugin prototype — bidirectional events over SSH, skill contract pattern (input/output/events), build delegation, progress reporting.
+
+## ref-homaruscc-mcp-proxy
+- **Source:** local:../homaruscc/src/mcp-proxy.ts
+- **Type:** local
+- **Fetched:** 2026-02-24
+- **Requirements:** R71, R72, R74, R76, R77
+- **Status:** active
+- **Summary:** Thin MCP proxy that uses @modelcontextprotocol/sdk stdio transport. Spawns backend as child process, forwards tool/resource calls over HTTP, restart_backend tool, WebSocket event notifications.
+
+## ref-homaruscc-backend
+- **Source:** local:../homaruscc/src/backend.ts
+- **Type:** local
+- **Fetched:** 2026-02-24
+- **Requirements:** R73, R75, R78
+- **Status:** active
+- **Summary:** Standalone backend process. Creates event loop, starts DashboardServer with /api/health, /api/wait, /api/tool-call, /api/resource endpoints used by MCP proxy.
+
+## ref-homaruscc-mcp-tools
+- **Source:** local:../homaruscc/src/mcp-tools.ts
+- **Type:** local
+- **Fetched:** 2026-02-24
+- **Requirements:** R79, R80, R81, R82, R83, R84, R85, R86, R87, R88, R89, R90, R91
+- **Status:** active
+- **Summary:** MCP tool definitions: telegram_send/read/typing/react, memory_search/store, timer_schedule/cancel, get_status, get_events, wait_for_event, dashboard_send.
+
+## ref-homaruscc-mcp-resources
+- **Source:** local:../homaruscc/src/mcp-resources.ts
+- **Type:** local
+- **Fetched:** 2026-02-24
+- **Requirements:** R92, R93, R94, R95
+- **Status:** active
+- **Summary:** MCP resources: identity://soul, identity://user, config://current (redacted), events://recent.
+
+## ref-homaruscc-event-loop
+- **Source:** local:../homaruscc/bin/event-loop
+- **Type:** local
+- **Fetched:** 2026-02-24
+- **Requirements:** R96, R97, R98, R99
+- **Status:** active
+- **Summary:** Bash script long-polling /api/wait, blocks at OS level (zero tokens while idle), PID file dedup, prints events and exits.

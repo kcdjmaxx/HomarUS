@@ -6,3 +6,4 @@ dist/
 !src/**
 .env
 .DS_Store
+local/
