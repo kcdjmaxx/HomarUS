@@ -8,12 +8,17 @@ const DEFAULT_CONFIG: ConfigData = {
   models: { default: "anthropic/claude-sonnet-4-5" },
   channels: {},
   agents: { maxConcurrent: 5, defaultTimeout: 300_000, defaultMaxTurns: 20 },
-  memory: { search: { vectorWeight: 0.7, ftsWeight: 0.3 } },
+  memory: {
+    search: { vectorWeight: 0.7, ftsWeight: 0.3, mmrEnabled: true, mmrLambda: 0.7 },
+    decay: { enabled: true, halfLifeDays: 30, evergreenPatterns: ["MEMORY.md", "SOUL.md", "USER.md", "soul.md", "user.md"] },
+    dreams: { enabled: true, halfLifeDays: 7, baseWeight: 0.5, patterns: ["dreams/", "local/dreams/"] },
+  },
   skills: { paths: [] },
   server: { port: 18800 },
   timers: { enabled: true },
   identity: {},
   browser: { enabled: false, headless: true },
+  factExtractor: { enabled: false, batchSize: 5, extractionDelayMs: 60_000, model: "claude-haiku-4-5-20251001" },
 };
 
 // Keys that can be hot-reloaded without restart

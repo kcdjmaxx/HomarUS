@@ -52,7 +52,25 @@ while true; do
       cat /tmp/homarus-wait-response.json
       echo ""
       echo "---"
-      echo "Event loop paused. Handle the events above, then restart: bash \"\$PWD/bin/event-loop\""
+      # Check if backend is signaling auto-restart due to high compaction count
+      if command -v jq &>/dev/null && jq -e '.shouldRestart' /tmp/homarus-wait-response.json &>/dev/null; then
+        echo "COMPACTION LIMIT REACHED -- Auto-restart required."
+        echo "Handle the events above, save state, then run: bash \"\$PWD/bin/restart-claude\""
+        # Check for identity payload
+        if jq -e '.identity' /tmp/homarus-wait-response.json &>/dev/null; then
+          echo "Identity was included in this response for post-compaction recovery."
+        fi
+        exit 2
+      else
+        # Check for identity payload (digest or full)
+        if command -v jq &>/dev/null && jq -e '.identity.full' /tmp/homarus-wait-response.json &>/dev/null; then
+          FULL=$(jq -r '.identity.full' /tmp/homarus-wait-response.json)
+          if [[ "$FULL" == "true" ]]; then
+            echo "Full identity included (post-compaction recovery)."
+          fi
+        fi
+        echo "Event loop paused. Handle the events above, then restart: bash \"\$PWD/bin/event-loop\""
+      fi
       exit 0
       ;;
     *)

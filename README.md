@@ -1,18 +1,18 @@
 # HomarUS
 
-> **Why "HomarUS"?** *Homarus* is the genus of true clawed lobsters — the evolved successor to the claw. The **US** isn't just taxonomy. It's the whole point: human and AI, working together. There is no artificial intelligence without *us*.
+> **Why "HomarUS"?** *Homarus* is the genus of true clawed lobsters -- the evolved successor to the claw. The **US** isn't just taxonomy. It's the whole point: human and AI, working together. There is no artificial intelligence without *us*.
 
-Event-driven AI agent coordinator. Receives events from channels, skills, timers, and webhooks — spawns parallel agents to handle the work.
+Event-driven AI agent coordinator. Receives events from channels, skills, timers, and webhooks -- spawns parallel agents to handle the work.
 
 Model-agnostic. Skill-based. Built for people who want to run their own AI infrastructure.
 
 ## What it does
 
 ```
-Channels (Telegram, Discord, CLI, ...)
-Skills (web UIs, scripts, services)         →  Event Loop  →  Agents (parallel)
-Timers (cron, intervals, one-shots)                           ↓
-Webhooks (HTTP callbacks)                                  Tools, Memory, Models
+Channels (Telegram, Dashboard, CLI, ...)
+Skills (web UIs, scripts, services)         ->  Event Loop  ->  Agents (parallel)
+Timers (cron, intervals, one-shots)                              |
+Webhooks (HTTP callbacks)                                     Tools, Memory, Models
 ```
 
 The loop is a **scheduler and router**, not an AI agent. It receives events, decides what work needs to happen, spawns agents to do it, and handles the results. Agents run in parallel with configurable concurrency, backpressure, and failover.
@@ -26,7 +26,7 @@ HomarUS runs in two modes:
 | **Standalone** | `homarus start` | Runs its own event loop with built-in agents, model routing, and tool execution |
 | **MCP Server** | `homarus-mcp` | Exposes HomarUS as a [Model Context Protocol](https://modelcontextprotocol.io/) server for Claude Code (or any MCP client) |
 
-In MCP mode, HomarUS provides channels, memory, timers, and tools to Claude Code — Claude becomes the reasoning engine while HomarUS handles I/O. The two-process architecture (thin proxy + restartable backend) means the MCP connection survives backend restarts.
+In MCP mode, HomarUS provides channels, memory, timers, docs, browser, and tools to Claude Code -- Claude becomes the reasoning engine while HomarUS handles I/O. The two-process architecture (thin proxy + restartable backend) means the MCP connection survives backend restarts.
 
 ## Install
 
@@ -41,20 +41,16 @@ npx homarus init
 npx homarus start
 ```
 
-## Quick start — Standalone
+## Quick start -- Standalone
 
 ```bash
 homarus init        # Interactive wizard: pick provider, enter API key, configure Telegram
 homarus start       # Start the event loop
 ```
 
-The setup wizard walks you through provider selection (Anthropic, OpenAI, OpenRouter, or Ollama), API key entry, default model choice, and optional Telegram bot setup. Your config is ready to use immediately — no manual JSON editing required.
+The setup wizard walks you through provider selection (Anthropic, OpenAI, OpenRouter, or Ollama), API key entry, default model choice, and optional Telegram bot setup.
 
-Use `--no-wizard` to skip the wizard and generate a default config for manual editing.
-
-See the **[Setup & Usage Guide](docs/guide.md)** for detailed configuration and more.
-
-## Quick start — MCP Server (Claude Code)
+## Quick start -- MCP Server (Claude Code)
 
 ### 1. Configure
 
@@ -66,7 +62,6 @@ TELEGRAM_BOT_TOKEN=your-bot-token-here
 ```
 
 ```json
-// ~/.homarus/config.json
 {
   "channels": {
     "telegram": {
@@ -85,7 +80,8 @@ TELEGRAM_BOT_TOKEN=your-bot-token-here
   "identity": {
     "dir": "~/.homarus/identity"
   },
-  "timers": { "enabled": true }
+  "timers": { "enabled": true },
+  "dashboard": { "enabled": true }
 }
 ```
 
@@ -104,49 +100,90 @@ Add to your project's `.mcp.json`:
 }
 ```
 
-Or if installed globally / from source, point directly to the script:
-
-```json
-{
-  "mcpServers": {
-    "homarus": {
-      "command": "node",
-      "args": ["/path/to/homarus/dist/mcp-proxy.js"]
-    }
-  }
-}
-```
-
 ### 3. Restart Claude Code
 
-The MCP server starts automatically when Claude Code launches. The proxy spawns the backend, which connects to Telegram, initializes memory, and starts timers.
+The MCP server starts automatically when Claude Code launches. The proxy spawns the backend, which connects to Telegram, initializes memory and docs indexes, and starts timers.
 
 ### 4. Use the event loop
 
-HomarUS includes a zero-token event loop script that long-polls for events. While waiting, Claude consumes no tokens — the bash process blocks at the OS level.
+HomarUS includes a zero-token event loop script that long-polls for events. While waiting, Claude consumes no tokens -- the bash process blocks at the OS level.
 
 ```bash
 bash /path/to/homarus/bin/event-loop
 ```
 
-The script returns JSON when an event arrives (Telegram message, timer fire, etc.). Handle the event, then restart the script to continue polling.
+The script returns JSON when an event arrives (Telegram message, timer fire, dashboard chat, etc.). Handle the event, then restart the script to continue polling.
 
-### MCP tools
+## Features
 
-| Tool | Purpose |
-|------|---------|
-| `telegram_send` | Send a Telegram message |
-| `telegram_read` | Read recent incoming messages |
-| `telegram_typing` | Show typing indicator |
-| `telegram_react` | React to a message with emoji |
-| `memory_search` | Hybrid vector + FTS search |
-| `memory_store` | Store and index content |
-| `timer_schedule` | Schedule cron/interval/one-shot timers |
-| `timer_cancel` | Cancel a timer |
-| `get_status` | System health and stats |
-| `get_events` | Recent event history |
-| `wait_for_event` | Long-poll for next event |
-| `restart_backend` | Restart the backend process (proxy stays up) |
+### Web Dashboard
+
+Real-time dashboard at `http://localhost:3120` with chat, event log, status panel, and memory browser. Uses WebSocket for live event streaming. See [docs/dashboard.md](docs/dashboard.md).
+
+### Memory with Temporal Decay and Dreams
+
+Hybrid vector + FTS search backed by SQLite with sqlite-vec. Features include:
+
+- **Temporal decay** -- older memories naturally fade (configurable half-life, default 30 days)
+- **Evergreen content** -- identity files and key memories are exempt from decay
+- **Dream scoring** -- dream cycle output stored at 0.5x weight with 7-day half-life
+- **MMR deduplication** -- Maximal Marginal Relevance reranking for diverse results
+
+See [docs/docs-vectordb.md](docs/docs-vectordb.md).
+
+### Domain Documentation Database
+
+Separate from personal memory, the DocsIndex provides domain-specific vector databases for reference documentation. Each domain gets its own isolated SQLite index.
+
+- Ingest files, directories, or raw text via `docs_ingest` / `docs_ingest_text`
+- Search single domains or across all with `docs_search`
+- Semantic clustering via `docs_get_clusters`
+- 7 dedicated MCP tools
+
+See [docs/docs-vectordb.md](docs/docs-vectordb.md).
+
+### Compaction Resilience
+
+Survives Claude Code context compaction with pre/post hooks:
+
+- Pre-compact saves session state and instructs the agent to preserve context
+- Post-compact re-injects identity, timers, and agent status
+- Auto-restart after 8 compactions to prevent degradation
+
+See [docs/advanced.md](docs/advanced.md#session-checkpoints--compaction-resilience).
+
+### Passive Fact Extraction
+
+The FactExtractor runs in the background, sending conversation batches to Claude Haiku to extract preferences, corrections, patterns, and decisions. Results are stored in memory under structured key prefixes -- zero context window cost to the main agent.
+
+### Browser Automation
+
+7 Playwright-based browser tools for web scraping, form filling, and screenshots. Lazy-loaded on first use. See [docs/advanced.md](docs/advanced.md#browser-automation).
+
+### Identity System
+
+Layered identity with soul.md, user.md, state.md, preferences.md, and disagreements.md. Supports channel-specific overlays, workspace files, and a reflection/dream cycle. See [docs/identity.md](docs/identity.md).
+
+### AI Image Generation
+
+The `nano_banana` tool generates images via Google's Gemini 2.5 Flash Image model, saved to `~/.homarus/images/`.
+
+### MCP tools (30 total)
+
+| Group | Tools |
+|-------|-------|
+| Telegram (5) | `telegram_send`, `telegram_read`, `telegram_typing`, `telegram_react`, `telegram_send_photo` |
+| Memory (2) | `memory_search`, `memory_store` |
+| Docs (7) | `docs_search`, `docs_ingest`, `docs_ingest_text`, `docs_list`, `docs_clear`, `docs_get_clusters`, `docs_clear_compiled` |
+| Timers (2) | `timer_schedule`, `timer_cancel` |
+| Dashboard (1) | `dashboard_send` |
+| System (3) | `get_status`, `get_events`, `wait_for_event` |
+| Browser (7) | `browser_navigate`, `browser_snapshot`, `browser_screenshot`, `browser_click`, `browser_type`, `browser_evaluate`, `browser_content` |
+| Image (1) | `nano_banana` |
+| Meta (1) | `run_tool` (delegates to bash, read, write, edit, glob, grep, git, web_fetch, web_search, memory_*) |
+| Proxy (1) | `restart_backend` |
+
+See [docs/mcp-tools.md](docs/mcp-tools.md) for the complete reference.
 
 ### MCP resources
 
@@ -157,49 +194,63 @@ The script returns JSON when an event arrives (Telegram message, timer fire, etc
 | `config://current` | Current config (secrets redacted) |
 | `events://recent` | Recent event history |
 
-### Running alongside other MCP servers
-
-HomarUS uses port `18801` by default (configurable via `HOMARUS_MCP_PORT` env var). Each instance needs its own Telegram bot token — create additional bots via [@BotFather](https://t.me/BotFather). Config, identity, and memory are fully isolated under `~/.homarus/`.
-
 ## Architecture
 
 ### Core
 
-- **Homarus** — central event loop, single-threaded coordinator
-- **EventBus / EventQueue** — typed pub/sub with priority ordering and backpressure
-- **AgentManager / Agent** — spawns and tracks parallel AI agents (standalone mode)
-- **ModelRouter / ModelProvider** — model-agnostic with failover chains (Anthropic, OpenAI, OpenRouter, Ollama, any OpenAI-compatible endpoint)
-- **SkillManager / Skill** — open plugin system via HTTP, stdio, or in-process transports
-- **ChannelManager / ChannelAdapter** — normalized message ingestion from any platform
-- **MemoryIndex** — vector + full-text hybrid search for long-term memory
-- **IdentityManager** — layered soul/user identity system
-- **TimerService** — cron expressions, intervals, one-shots via croner
-- **HttpApi** — REST API for status, skill callbacks, and external integrations
-- **BrowserManager** — optional Playwright-based headless browser (lazy-loaded, requires `npm install playwright`)
-- **Config** — JSON config with JSON Schema validation and hot reload
+- **Homarus** -- central event loop, single-threaded coordinator
+- **EventBus / EventQueue** -- typed pub/sub with priority ordering and backpressure
+- **AgentManager / Agent** -- spawns and tracks parallel AI agents (standalone mode)
+- **ModelRouter / ModelProvider** -- model-agnostic with failover chains
+- **SkillManager / Skill** -- open plugin system via HTTP, stdio, or in-process transports
+- **ChannelManager / ChannelAdapter** -- normalized message ingestion from any platform
+- **MemoryIndex** -- vector + full-text hybrid search with temporal decay, dream scoring, and MMR
+- **DocsIndex** -- domain-specific documentation vector databases
+- **IdentityManager** -- layered soul/user identity system with overlays and workspace files
+- **TimerService** -- cron expressions, intervals, one-shots via croner
+- **CompactionManager** -- pre/post compaction hooks with auto-restart
+- **FactExtractor** -- passive knowledge capture from conversations
+- **BrowserManager** -- optional Playwright-based headless browser (lazy-loaded)
+- **DashboardServer** -- Express + WebSocket real-time dashboard
+- **Config** -- JSON config with environment variable resolution and hot reload
 
 ### MCP layer
 
-- **McpProxy** — thin stdio proxy, forwards tool calls to backend over HTTP. Never restarts.
-- **McpBackend** — starts the Homarus event loop + HTTP API server. Can be restarted without dropping the MCP connection.
-- **McpBackendServer** — Express HTTP API (`/api/health`, `/api/tool-call`, `/api/wait`, etc.) used by the proxy
-- **McpTools** — 12 MCP tool definitions (Telegram, memory, timers, status)
-- **McpResources** — 4 MCP resources (identity, config, events)
+- **McpProxy** -- thin stdio proxy, forwards tool calls to backend over HTTP. Never restarts.
+- **McpBackend** -- starts the Homarus event loop + HTTP API server. Can be restarted without dropping the MCP connection.
+- **McpTools** -- 30 MCP tool definitions
+- **McpResources** -- 4 MCP resources (identity, config, events)
 
 ```
-Claude Code  ←stdio→  McpProxy  ←HTTP→  McpBackend
-                                           ↓
-                                        Homarus
-                                     (event loop)
-                                      ↕        ↕
-                                  Telegram   Timers
-                                  Memory     Tools
+Claude Code  <-stdio->  McpProxy  <-HTTP->  McpBackend
+                                              |
+                                           Homarus
+                                        (event loop)
+                                         |        |
+                                     Telegram   Timers
+                                     Memory     Browser
+                                     Docs       Dashboard
 ```
+
+## Documentation
+
+See the **[docs/](docs/)** directory for detailed documentation:
+
+- [Getting Started](docs/getting-started.md)
+- [Core Concepts](docs/core-concepts.md)
+- [Configuration](docs/configuration.md)
+- [Identity](docs/identity.md)
+- [Memory & Docs Vector DB](docs/docs-vectordb.md)
+- [Dashboard](docs/dashboard.md)
+- [MCP Tools Reference](docs/mcp-tools.md)
+- [Advanced Features](docs/advanced.md)
+- [Operations](docs/operations.md)
+- [Security](docs/security.md)
 
 ## CLI
 
 ```
-homarus start [config]      Start the event loop — standalone mode (foreground)
+homarus start [config]      Start the event loop -- standalone mode (foreground)
 homarus init [--no-wizard]  Interactive setup wizard (or defaults)
 homarus status [port]       Show status of running instance
 homarus config [config]     Validate config file
@@ -216,12 +267,13 @@ Per-project override: `./homarus.json`
 Skills go in `~/.homarus/skills/` or `./skills/`.
 Identity files in `~/.homarus/identity/`.
 Memory index at `~/.homarus/memory/`.
+Docs indexes at `~/.homarus/docs/`.
 
 ## Safety
 
 ### Circuit breaker
 
-Agents stop automatically after 3 consecutive tool errors instead of looping until max turns. When tripped, the agent explains what went wrong and exits. Configurable via `maxConsecutiveErrors` in agent config.
+Agents stop automatically after 3 consecutive tool errors instead of looping until max turns.
 
 ### Bash guardrails
 
@@ -242,18 +294,6 @@ Define allow/deny rules in your config to restrict what tools agents can use:
 }
 ```
 
-Groups (`group:fs`, `group:runtime`, `group:web`, `group:code`, `group:memory`) resolve to their member tools automatically.
-
-## Built-in tools
-
-Agents get access to: `bash`, `read`, `write`, `edit`, `glob`, `grep`, `git`, `web_fetch`, `web_search`, `lsp`, `memory_search`, `memory_get`, `memory_store`, and optionally `browser`.
-
-Browser support requires Playwright as an optional dependency:
-
-```bash
-npm install playwright    # only needed if browser.enabled is set in config
-```
-
 ## Requirements
 
 - Node.js >= 22
@@ -261,22 +301,7 @@ npm install playwright    # only needed if browser.enabled is set in config
 
 ## Built with mini-spec
 
-HomarUS was designed and implemented using [mini-spec](https://github.com/zot/mini-spec), an 8-phase methodology for AI-assisted software development. Every source file traces back through the full chain: reference materials → natural language specs → requirements → CRC cards → sequence diagrams → code with traceability comments.
-
-The `refs/`, `specs/`, and `design/` directories are the living design artifacts, not just documentation.
-
-## Status
-
-Core architecture implemented (26 source files, 70+ requirements, 20 CRC cards, 7 sequence diagrams, 51 tests passing across 5 test suites). Built-in tool suite complete with safety guardrails. MCP server mode with Claude Code integration. Published on npm.
-
-## Roadmap
-
-- [x] ~~npm publish~~ (live on npm as `homarus`)
-- [x] ~~MCP server mode~~ (two-process proxy + backend architecture)
-- [x] ~~Claude Code event loop~~ (zero-token long-polling)
-- [ ] SEA binaries + Homebrew tap
-- [ ] OAuth support for Google/Gemini (the only major provider with third-party OAuth)
-- [x] ~~`homarus auth` onboarding command~~ (shipped as interactive `homarus init` wizard)
+HomarUS was designed and implemented using [mini-spec](https://github.com/zot/mini-spec), an 8-phase methodology for AI-assisted software development. Every source file traces back through the full chain: reference materials -> specs -> requirements -> CRC cards -> sequence diagrams -> code.
 
 ## License
 

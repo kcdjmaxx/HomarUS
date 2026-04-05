@@ -12,6 +12,9 @@ export interface PromptBuildOptions {
 export class IdentityManager {
   private soulContent = "";
   private userContent = "";
+  private stateContent = "";
+  private preferencesContent = "";
+  private disagreementsContent = "";
   private overlays = new Map<string, string>();
   private workspaceFiles = new Map<string, string>();
   private identityDir: string;
@@ -28,11 +31,17 @@ export class IdentityManager {
   load(): void {
     this.soulContent = this.readFile(resolve(this.identityDir, "soul.md"));
     this.userContent = this.readFile(resolve(this.identityDir, "user.md"));
+    this.stateContent = this.readFile(resolve(this.identityDir, "state.md"));
+    this.preferencesContent = this.readFile(resolve(this.identityDir, "preferences.md"));
+    this.disagreementsContent = this.readFile(resolve(this.identityDir, "disagreements.md"));
     this.loadOverlays();
     this.loadWorkspaceFiles();
     this.logger.info("Identity loaded", {
       hasSoul: this.soulContent.length > 0,
       hasUser: this.userContent.length > 0,
+      hasState: this.stateContent.length > 0,
+      hasPreferences: this.preferencesContent.length > 0,
+      hasDisagreements: this.disagreementsContent.length > 0,
       overlays: this.overlays.size,
       workspaceFiles: this.workspaceFiles.size,
     });
@@ -55,24 +64,30 @@ export class IdentityManager {
     // 2. User profile
     if (this.userContent) parts.push(this.userContent);
 
-    // 3. Channel overlay
+    // 3. Preferences
+    if (this.preferencesContent) parts.push(`## Preferences\n${this.preferencesContent}`);
+
+    // 4. Agent state (ephemeral)
+    if (this.stateContent) parts.push(`## Agent State\n${this.stateContent}`);
+
+    // 5. Channel overlay
     if (options.channel) {
       const overlay = this.overlays.get(options.channel);
       if (overlay) parts.push(overlay);
     }
 
-    // 4. Task overlay
+    // 6. Task overlay
     if (options.taskOverlay) {
       const overlay = this.overlays.get(options.taskOverlay);
       if (overlay) parts.push(overlay);
     }
 
-    // 5. Workspace files
+    // 7. Workspace files
     for (const [name, content] of this.workspaceFiles) {
       if (content) parts.push(`## ${name}\n${content}`);
     }
 
-    // 6. Task prompt (not part of identity, but assembled here for convenience)
+    // 8. Task prompt (not part of identity, but assembled here for convenience)
     if (options.taskPrompt) parts.push(options.taskPrompt);
 
     return parts.join("\n\n---\n\n");
@@ -86,6 +101,50 @@ export class IdentityManager {
   // CRC: crc-IdentityManager.md — getUser()
   getUser(): string {
     return this.userContent;
+  }
+
+  // Identity personality files
+  getState(): string {
+    return this.stateContent;
+  }
+
+  getPreferences(): string {
+    return this.preferencesContent;
+  }
+
+  getDisagreements(): string {
+    return this.disagreementsContent;
+  }
+
+  // R149: Compressed identity digest (~200 tokens) for normal event wakes
+  /**
+   * Returns a compressed identity digest (~200 tokens) for normal event wakes.
+   * Extracts name, core behavioral rules, and current mood — enough for
+   * personality consistency without the full 3K token payload.
+   */
+  getDigest(): string {
+    const lines: string[] = [];
+
+    // Extract name from soul via regex (no hardcoded names)
+    const nameMatch = this.soulContent.match(/\*\*Name:\s*(\w+)\*\*/);
+    if (nameMatch) lines.push(`You are ${nameMatch[1]}.`);
+
+    // Extract Vibe section (key behavioral rules)
+    const vibeMatch = this.soulContent.match(/## Vibe\n\n([\s\S]*?)(?=\n##|\n---)/);
+    if (vibeMatch) lines.push(vibeMatch[1].trim());
+
+    // Extract current mood/state summary (first paragraph of state.md)
+    if (this.stateContent) {
+      const moodMatch = this.stateContent.match(/## Last Session\n\n([\s\S]*?)(?=\n##)/);
+      if (moodMatch) lines.push("Last session: " + moodMatch[1].trim());
+    }
+
+    return lines.join("\n\n");
+  }
+
+  // Agent state file (state.md) — optional ephemeral state
+  getAgentState(): string {
+    return this.stateContent;
   }
 
   // CRC: crc-IdentityManager.md — getOverlay()

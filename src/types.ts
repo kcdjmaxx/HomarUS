@@ -208,6 +208,8 @@ export interface ConfigData {
   timers: TimersConfig;
   identity: IdentityConfig;
   browser?: BrowserConfig;
+  docs?: DocsConfig;
+  factExtractor?: FactExtractorConfig;
 }
 
 export interface ModelsConfig {
@@ -252,7 +254,23 @@ export interface MemoryConfig {
     apiKey?: string;
     dimensions?: number;
   };
-  search?: { vectorWeight?: number; ftsWeight?: number };
+  search?: {
+    vectorWeight?: number;
+    ftsWeight?: number;
+    mmrEnabled?: boolean;
+    mmrLambda?: number;
+  };
+  decay?: {
+    enabled?: boolean;
+    halfLifeDays?: number;
+    evergreenPatterns?: string[];
+  };
+  dreams?: {
+    enabled?: boolean;
+    halfLifeDays?: number;
+    baseWeight?: number;
+    patterns?: string[];
+  };
   extraPaths?: string[];
 }
 
@@ -265,14 +283,43 @@ export interface ServerConfig {
   auth?: { token: string };
 }
 
+export interface TimerDefaultConfig {
+  name: string;
+  type: "cron" | "interval" | "once";
+  schedule: string;
+  timezone?: string;
+  prompt: string;
+  model?: string;
+}
+
 export interface TimersConfig {
   enabled?: boolean;
   store?: string;
+  defaults?: TimerDefaultConfig[];
 }
 
 export interface IdentityConfig {
   dir?: string;
   workspaceDir?: string;
+  limits?: {
+    soul?: number;
+    user?: number;
+    state?: number;
+    preferences?: number;
+    disagreements?: number;
+  };
+}
+
+export interface DocsConfig {
+  baseDir?: string;
+}
+
+export interface FactExtractorConfig {
+  enabled?: boolean;
+  batchSize?: number;
+  extractionDelayMs?: number;
+  model?: string;
+  apiKey?: string;
 }
 
 // --- Handlers ---

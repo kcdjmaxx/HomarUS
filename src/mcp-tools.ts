@@ -426,5 +426,340 @@ export function createMcpTools(loop: Homarus): McpToolDef[] {
     },
   });
 
+  // --- Browser tools (wrap BrowserManager via the registered "browser" tool) ---
+
+  const browserToolCall = async (action: Record<string, unknown>): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> => {
+    const tool = loop.getToolRegistry().get("browser");
+    if (!tool) {
+      return { content: [{ type: "text", text: "Browser not available — Playwright may not be installed. Run: npm install playwright" }], isError: true };
+    }
+    try {
+      const result = await tool.execute(action, { agentId: "mcp", sandbox: false, workingDir: process.cwd() });
+      if (result.error) {
+        return { content: [{ type: "text", text: `Error: ${result.error}` }], isError: true };
+      }
+      return { content: [{ type: "text", text: typeof result.output === "string" ? result.output : JSON.stringify(result.output) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Browser error: ${String(err)}` }], isError: true };
+    }
+  };
+
+  tools.push({
+    name: "browser_navigate",
+    description: "Navigate the browser to a URL. Returns page title and URL.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "URL to navigate to" },
+      },
+      required: ["url"],
+    },
+    async handler(params) {
+      const { url } = params as { url: string };
+      return browserToolCall({ action: "navigate", url });
+    },
+  });
+
+  tools.push({
+    name: "browser_snapshot",
+    description: "Get the accessibility tree / visible text content of the current page.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      return browserToolCall({ action: "content" });
+    },
+  });
+
+  tools.push({
+    name: "browser_screenshot",
+    description: "Take a screenshot of the current page. Returns base64-encoded PNG.",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      return browserToolCall({ action: "screenshot" });
+    },
+  });
+
+  tools.push({
+    name: "browser_click",
+    description: "Click an element on the page by CSS selector.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "CSS selector of the element to click" },
+      },
+      required: ["selector"],
+    },
+    async handler(params) {
+      const { selector } = params as { selector: string };
+      return browserToolCall({ action: "click", selector });
+    },
+  });
+
+  tools.push({
+    name: "browser_type",
+    description: "Type text into an input element identified by CSS selector.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "CSS selector of the input element" },
+        text: { type: "string", description: "Text to type into the element" },
+      },
+      required: ["selector", "text"],
+    },
+    async handler(params) {
+      const { selector, text } = params as { selector: string; text: string };
+      return browserToolCall({ action: "type", selector, text });
+    },
+  });
+
+  tools.push({
+    name: "browser_evaluate",
+    description: "Execute JavaScript in the browser page context and return the result.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        script: { type: "string", description: "JavaScript code to evaluate in the page" },
+      },
+      required: ["script"],
+    },
+    async handler(params) {
+      const { script } = params as { script: string };
+      return browserToolCall({ action: "evaluate", script });
+    },
+  });
+
+  tools.push({
+    name: "browser_content",
+    description: "Get the visible text content of the current page (innerText of body).",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      return browserToolCall({ action: "content" });
+    },
+  });
+
+  // --- Docs Index tools ---
+
+  // docs_search
+  tools.push({
+    name: "docs_search",
+    description: "Search a documentation domain using hybrid vector + FTS search",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: { type: "string", description: "Documentation domain to search" },
+        query: { type: "string", description: "Search query" },
+        limit: { type: "number", description: "Max results (default 10)" },
+      },
+      required: ["domain", "query"],
+    },
+    async handler(params) {
+      const { domain, query, limit = 10 } = params as { domain: string; query: string; limit?: number };
+      const docsIndex = loop.getDocsIndex();
+      if (!docsIndex) {
+        return { content: [{ type: "text", text: "Docs index not initialized" }], isError: true };
+      }
+      const results = await docsIndex.search(domain, query, limit);
+      if (results.length === 0) {
+        return { content: [{ type: "text", text: "No results found" }] };
+      }
+      const formatted = results.map((r, i) =>
+        `[${i + 1}] ${r.path} (score: ${r.score.toFixed(3)})\n${r.content.slice(0, 500)}`
+      ).join("\n\n---\n\n");
+      return { content: [{ type: "text", text: formatted }] };
+    },
+  });
+
+  // docs_ingest
+  tools.push({
+    name: "docs_ingest",
+    description: "Ingest a file or directory into a documentation domain",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: { type: "string", description: "Documentation domain" },
+        filePath: { type: "string", description: "Absolute path to file or directory to ingest" },
+      },
+      required: ["domain", "filePath"],
+    },
+    async handler(params) {
+      const { domain, filePath } = params as { domain: string; filePath: string };
+      const docsIndex = loop.getDocsIndex();
+      if (!docsIndex) {
+        return { content: [{ type: "text", text: "Docs index not initialized" }], isError: true };
+      }
+      try {
+        const result = await docsIndex.ingest(domain, filePath);
+        return { content: [{ type: "text", text: `Ingested ${result.filesProcessed} file(s), ${result.chunksCreated} chunks into domain "${domain}"` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${String(err)}` }], isError: true };
+      }
+    },
+  });
+
+  // docs_ingest_text
+  tools.push({
+    name: "docs_ingest_text",
+    description: "Ingest raw text content into a documentation domain under a given key",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: { type: "string", description: "Documentation domain" },
+        key: { type: "string", description: "Key/path for this content (e.g. 'api-reference')" },
+        content: { type: "string", description: "Text content to ingest" },
+      },
+      required: ["domain", "key", "content"],
+    },
+    async handler(params) {
+      const { domain, key, content } = params as { domain: string; key: string; content: string };
+      const docsIndex = loop.getDocsIndex();
+      if (!docsIndex) {
+        return { content: [{ type: "text", text: "Docs index not initialized" }], isError: true };
+      }
+      try {
+        const result = await docsIndex.ingestText(domain, key, content);
+        return { content: [{ type: "text", text: `Ingested ${result.chunksCreated} chunks for key "${key}" in domain "${domain}"` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${String(err)}` }], isError: true };
+      }
+    },
+  });
+
+  // docs_list
+  tools.push({
+    name: "docs_list",
+    description: "List all documentation domains with file and chunk counts",
+    inputSchema: { type: "object", properties: {} },
+    async handler() {
+      const docsIndex = loop.getDocsIndex();
+      if (!docsIndex) {
+        return { content: [{ type: "text", text: "Docs index not initialized" }], isError: true };
+      }
+      const domains = docsIndex.listDomains();
+      if (domains.length === 0) {
+        return { content: [{ type: "text", text: "No documentation domains" }] };
+      }
+      const formatted = domains.map((d) =>
+        `${d.domain}: ${d.stats.fileCount} files, ${d.stats.chunkCount} chunks`
+      ).join("\n");
+      return { content: [{ type: "text", text: formatted }] };
+    },
+  });
+
+  // docs_clear
+  tools.push({
+    name: "docs_clear",
+    description: "Delete an entire documentation domain (removes its SQLite database)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: { type: "string", description: "Documentation domain to clear" },
+      },
+      required: ["domain"],
+    },
+    async handler(params) {
+      const { domain } = params as { domain: string };
+      const docsIndex = loop.getDocsIndex();
+      if (!docsIndex) {
+        return { content: [{ type: "text", text: "Docs index not initialized" }], isError: true };
+      }
+      await docsIndex.clearDomain(domain);
+      return { content: [{ type: "text", text: `Domain "${domain}" cleared` }] };
+    },
+  });
+
+  // docs_get_clusters
+  tools.push({
+    name: "docs_get_clusters",
+    description: "Get semantic clusters from a documentation domain. Clusters group related chunks by source file and embedding similarity.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: { type: "string", description: "Documentation domain" },
+        clusterIndex: { type: "number", description: "Return only this cluster index (optional, returns all if omitted)" },
+        clusterThreshold: { type: "number", description: "Cosine similarity threshold for merging clusters (default 0.85)" },
+        maxClusters: { type: "number", description: "Maximum number of clusters to return (default 20)" },
+      },
+      required: ["domain"],
+    },
+    async handler(params) {
+      const { domain, clusterIndex, clusterThreshold, maxClusters } = params as {
+        domain: string; clusterIndex?: number; clusterThreshold?: number; maxClusters?: number;
+      };
+      const docsIndex = loop.getDocsIndex();
+      if (!docsIndex) {
+        return { content: [{ type: "text", text: "Docs index not initialized" }], isError: true };
+      }
+      try {
+        let clusters = await docsIndex.getClusters(domain, { clusterThreshold, maxClusters });
+        if (clusterIndex !== undefined) {
+          clusters = clusters.filter(c => c.index === clusterIndex);
+          if (clusters.length === 0) {
+            return { content: [{ type: "text", text: `No cluster at index ${clusterIndex}` }] };
+          }
+        }
+        const formatted = clusters.map((c) =>
+          `Cluster ${c.index} (${c.chunkCount} chunks)\nSources: ${c.sources.join(", ")}\n${c.content.slice(0, 2000)}`
+        ).join("\n\n===\n\n");
+        return { content: [{ type: "text", text: formatted }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${String(err)}` }], isError: true };
+      }
+    },
+  });
+
+  // docs_clear_compiled
+  tools.push({
+    name: "docs_clear_compiled",
+    description: "Remove compiled/synthesized articles from a domain without removing raw chunks",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: { type: "string", description: "Documentation domain" },
+      },
+      required: ["domain"],
+    },
+    async handler(params) {
+      const { domain } = params as { domain: string };
+      const docsIndex = loop.getDocsIndex();
+      if (!docsIndex) {
+        return { content: [{ type: "text", text: "Docs index not initialized" }], isError: true };
+      }
+      const deleted = await docsIndex.clearCompiled(domain);
+      return { content: [{ type: "text", text: `Cleared ${deleted} compiled chunk(s) from domain "${domain}"` }] };
+    },
+  });
+
+  // docs_compile
+  tools.push({
+    name: "docs_compile",
+    description: "Synthesize concept articles from clustered documentation chunks using an LLM. Groups related chunks by embedding similarity, then generates coherent markdown articles for each cluster.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        domain: { type: "string", description: "Documentation domain to compile" },
+        clusterThreshold: { type: "number", description: "Cosine similarity threshold for merging clusters (default 0.85)" },
+        maxClusters: { type: "number", description: "Maximum clusters to process per batch (default 20)" },
+      },
+      required: ["domain"],
+    },
+    async handler(params) {
+      const { domain, clusterThreshold, maxClusters } = params as {
+        domain: string; clusterThreshold?: number; maxClusters?: number;
+      };
+      const docsIndex = loop.getDocsIndex();
+      if (!docsIndex) {
+        return { content: [{ type: "text", text: "Docs index not initialized" }], isError: true };
+      }
+      try {
+        const result = await docsIndex.compile(domain, {
+          clusterThreshold,
+          maxClustersPerBatch: maxClusters,
+        });
+        return { content: [{ type: "text", text: `Compiled domain "${domain}": ${result.clustersFound} clusters found, ${result.articlesGenerated} articles generated, ${result.chunksCreated} chunks created` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${String(err)}` }], isError: true };
+      }
+    },
+  });
+
   return tools;
 }

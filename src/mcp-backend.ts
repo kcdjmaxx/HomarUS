@@ -31,9 +31,14 @@ async function main(): Promise<void> {
   const loop = new Homarus(logger, configPath);
   await loop.start();
 
-  // R75: Create and start the MCP backend HTTP server
+  // R75: Create and start the MCP backend HTTP + WebSocket server
   const server = new McpBackendServer(logger, port, loop);
   await server.start();
+
+  // Forward event loop notifications to WebSocket clients
+  loop.setNotifyFn((event) => {
+    server.broadcastEvent(event);
+  });
 
   logger.info("HomarUS MCP backend running", { port });
 

@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { v4 as uuid } from "uuid";
 import { Cron } from "croner";
-import type { Event, Logger } from "./types.js";
+import type { Event, Logger, TimerDefaultConfig } from "./types.js";
 
 export interface TimerConfig {
   id?: string;
@@ -47,6 +47,37 @@ export class TimerService {
       this.logger.info("Loaded timers", { count: this.timers.size });
     } catch (err) {
       this.logger.error("Failed to load timers", { error: String(err) });
+    }
+  }
+
+  // Load default timers from config, skipping any that already exist by name
+  loadDefaults(defaults: TimerDefaultConfig[]): void {
+    const existingNames = new Set(
+      [...this.timers.values()].map((e) => e.config.name),
+    );
+
+    let added = 0;
+    for (const def of defaults) {
+      if (existingNames.has(def.name)) {
+        this.logger.debug("Default timer already exists, skipping", { name: def.name });
+        continue;
+      }
+      const config: TimerConfig = {
+        id: uuid(),
+        name: def.name,
+        type: def.type,
+        schedule: def.schedule,
+        prompt: def.prompt,
+        timezone: def.timezone,
+        model: def.model,
+      };
+      this.timers.set(config.id!, { config });
+      added++;
+    }
+
+    if (added > 0) {
+      this.saveTimers();
+      this.logger.info("Loaded default timers", { added, total: this.timers.size });
     }
   }
 

@@ -33,6 +33,36 @@ export function createMcpResources(loop: Homarus): McpResourceDef[] {
         return loop.getIdentityManager().getUser() || "(no user.md configured)";
       },
     },
+    // identity://state
+    {
+      uri: "identity://state",
+      name: "Agent State",
+      description: "Current state.md content -- ephemeral agent state",
+      mimeType: "text/markdown",
+      async handler() {
+        return loop.getIdentityManager().getState() || "(no state.md configured)";
+      },
+    },
+    // identity://preferences
+    {
+      uri: "identity://preferences",
+      name: "Preferences",
+      description: "Current preferences.md content -- learned user preferences",
+      mimeType: "text/markdown",
+      async handler() {
+        return loop.getIdentityManager().getPreferences() || "(no preferences.md configured)";
+      },
+    },
+    // identity://disagreements
+    {
+      uri: "identity://disagreements",
+      name: "Disagreements",
+      description: "Current disagreements.md content -- areas of principled disagreement",
+      mimeType: "text/markdown",
+      async handler() {
+        return loop.getIdentityManager().getDisagreements() || "(no disagreements.md configured)";
+      },
+    },
     // R94: config://current
     {
       uri: "config://current",

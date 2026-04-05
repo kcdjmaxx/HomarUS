@@ -1,0 +1,37 @@
+#!/bin/bash
+# Restart Claude Code in a tmux session
+# Called when compaction limit is reached or manual restart needed
+# Env vars: HOMARUS_PROJECT_DIR, HOMARUS_PORT
+
+set -euo pipefail
+
+PROJECT_DIR="${HOMARUS_PROJECT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+PORT="${HOMARUS_PORT:-18801}"
+SESSION_NAME="homarus"
+
+# Reset compaction counter so new session starts clean
+mkdir -p "$HOME/.homarus"
+echo '{"count":0}' > "$HOME/.homarus/compaction-count.json"
+
+# Kill existing tmux session if it exists
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+  tmux kill-session -t "$SESSION_NAME"
+  sleep 1
+fi
+
+# Also kill any stray claude processes for this project
+pkill -f "claude.*$(basename "$PROJECT_DIR")" 2>/dev/null || true
+sleep 2
+
+# Start new tmux session
+tmux new-session -d -s "$SESSION_NAME" -c "$PROJECT_DIR"
+
+if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+  echo "Failed to create tmux session"
+  exit 1
+fi
+
+# Start claude in the tmux session
+tmux send-keys -t "$SESSION_NAME" 'claude --dangerously-skip-permissions' Enter
+
+echo "tmux session '${SESSION_NAME}' started with claude. Attach: tmux attach -t ${SESSION_NAME}"

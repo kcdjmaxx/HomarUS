@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname, extname } from "node:path";
 import { watch, type FSWatcher } from "node:fs";
-import type { Logger } from "./types.js";
+import type { Logger, MemoryConfig } from "./types.js";
 
 export interface SearchResult {
   path: string;
@@ -29,6 +29,11 @@ interface Chunk {
   content: string;
 }
 
+// Temporal decay defaults
+const DEFAULT_EVERGREEN_PATTERNS = ["MEMORY.md", "SOUL.md", "USER.md", "soul.md", "user.md"];
+const DEFAULT_DREAM_PATTERNS = ["dreams/", "local/dreams/"];
+const MS_PER_DAY = 86_400_000;
+
 export class MemoryIndex {
   private db: unknown = null; // better-sqlite3 Database
   private embeddingProvider: EmbeddingProvider | null = null;
@@ -36,8 +41,20 @@ export class MemoryIndex {
   private chunkOverlap: number;
   private vectorWeight: number;
   private ftsWeight: number;
+  // Decay scoring
+  private decayEnabled: boolean;
+  private decayHalfLifeDays: number;
+  private evergreenPatterns: string[];
+  // Dream-aware scoring
+  private dreamEnabled: boolean;
+  private dreamPatterns: string[];
+  private dreamHalfLifeDays: number;
+  private dreamBaseWeight: number;
+  // MMR diversity reranking
+  private mmrEnabled: boolean;
+  private mmrLambda: number;
   private indexedPaths: string[] = [];
-  private watcher: FSWatcher | null = null;
+  private watchers: FSWatcher[] = [];
   private logger: Logger;
   private initialized = false;
 
@@ -46,16 +63,57 @@ export class MemoryIndex {
     chunkOverlap?: number;
     vectorWeight?: number;
     ftsWeight?: number;
+    decayEnabled?: boolean;
+    decayHalfLifeDays?: number;
+    evergreenPatterns?: string[];
+    dreamEnabled?: boolean;
+    dreamPatterns?: string[];
+    dreamHalfLifeDays?: number;
+    dreamBaseWeight?: number;
+    mmrEnabled?: boolean;
+    mmrLambda?: number;
   }) {
     this.logger = logger;
     this.chunkSize = options?.chunkSize ?? 400;
     this.chunkOverlap = options?.chunkOverlap ?? 80;
     this.vectorWeight = options?.vectorWeight ?? 0.7;
     this.ftsWeight = options?.ftsWeight ?? 0.3;
+    this.decayEnabled = options?.decayEnabled ?? true;
+    this.decayHalfLifeDays = options?.decayHalfLifeDays ?? 30;
+    this.evergreenPatterns = options?.evergreenPatterns ?? DEFAULT_EVERGREEN_PATTERNS;
+    this.dreamEnabled = options?.dreamEnabled ?? true;
+    this.dreamPatterns = options?.dreamPatterns ?? DEFAULT_DREAM_PATTERNS;
+    this.dreamHalfLifeDays = options?.dreamHalfLifeDays ?? 7;
+    this.dreamBaseWeight = options?.dreamBaseWeight ?? 0.5;
+    this.mmrEnabled = options?.mmrEnabled ?? true;
+    this.mmrLambda = options?.mmrLambda ?? 0.7;
   }
 
   setEmbeddingProvider(provider: EmbeddingProvider): void {
     this.embeddingProvider = provider;
+  }
+
+  // Configure decay scoring at runtime
+  setDecayConfig(config: NonNullable<MemoryConfig["decay"]>): void {
+    if (config.enabled !== undefined) this.decayEnabled = config.enabled;
+    if (config.halfLifeDays !== undefined) this.decayHalfLifeDays = config.halfLifeDays;
+    if (config.evergreenPatterns !== undefined) this.evergreenPatterns = config.evergreenPatterns;
+  }
+
+  // Configure dream scoring at runtime
+  setDreamConfig(config: NonNullable<MemoryConfig["dreams"]>): void {
+    if (config.enabled !== undefined) this.dreamEnabled = config.enabled;
+    if (config.halfLifeDays !== undefined) this.dreamHalfLifeDays = config.halfLifeDays;
+    if (config.baseWeight !== undefined) this.dreamBaseWeight = config.baseWeight;
+    if (config.patterns !== undefined) this.dreamPatterns = config.patterns;
+  }
+
+  // Configure search/MMR at runtime
+  setSearchConfig(config: NonNullable<MemoryConfig["search"]>): void {
+    if (config.vectorWeight !== undefined) this.vectorWeight = config.vectorWeight;
+    if (config.ftsWeight !== undefined) this.ftsWeight = config.ftsWeight;
+    if (config.mmrEnabled !== undefined) this.mmrEnabled = config.mmrEnabled;
+    if (config.mmrLambda !== undefined) this.mmrLambda = config.mmrLambda;
   }
 
   // CRC: crc-MemoryIndex.md — initialize()
@@ -157,11 +215,12 @@ export class MemoryIndex {
         const rows = db.prepare("SELECT id FROM chunks WHERE path = ? ORDER BY chunk_index").all(path) as Array<{ id: number }>;
 
         const insertVec = db.prepare(
-          "INSERT OR REPLACE INTO chunks_vec (chunk_id, embedding) VALUES (?, ?)"
+          "INSERT OR REPLACE INTO chunks_vec (chunk_id, embedding) VALUES (CAST(? AS INTEGER), ?)"
         );
         const insertVecs = db.transaction(() => {
           for (let i = 0; i < rows.length && i < embeddings.length; i++) {
-            insertVec.run(rows[i].id, new Float32Array(embeddings[i]));
+            const embBuf = new Uint8Array(new Float32Array(embeddings[i]).buffer);
+            insertVec.run(rows[i].id, embBuf);
           }
         });
         insertVecs();
@@ -192,13 +251,13 @@ export class MemoryIndex {
 
     const db = this.db as import("better-sqlite3").Database;
     const limit = options?.limit ?? 10;
-    const minScore = options?.minScore ?? 0.3;
-    const results = new Map<number, { path: string; content: string; score: number; chunkIndex: number }>();
+    const minScore = options?.minScore ?? 0.05;
+    const results = new Map<number, { path: string; content: string; score: number; chunkIndex: number; updatedAt: number }>();
 
     // FTS search
     try {
       const ftsResults = db.prepare(`
-        SELECT c.id, c.path, c.content, c.chunk_index,
+        SELECT c.id, c.path, c.content, c.chunk_index, c.updated_at,
                bm25(chunks_fts) AS rank
         FROM chunks_fts f
         JOIN chunks c ON c.id = f.rowid
@@ -206,7 +265,7 @@ export class MemoryIndex {
         ORDER BY rank
         LIMIT ?
       `).all(query, limit * 2) as Array<{
-        id: number; path: string; content: string; chunk_index: number; rank: number;
+        id: number; path: string; content: string; chunk_index: number; updated_at: number; rank: number;
       }>;
 
       // Normalize FTS scores to 0-1 range
@@ -218,6 +277,7 @@ export class MemoryIndex {
           content: row.content,
           score: normalizedScore * this.ftsWeight,
           chunkIndex: row.chunk_index,
+          updatedAt: row.updated_at,
         });
       }
     } catch {
@@ -234,24 +294,25 @@ export class MemoryIndex {
           WHERE embedding MATCH ?
           ORDER BY distance
           LIMIT ?
-        `).all(new Float32Array(queryEmb), limit * 2) as Array<{
+        `).all(new Uint8Array(new Float32Array(queryEmb).buffer), limit * 2) as Array<{
           chunk_id: number; distance: number;
         }>;
 
         for (const row of vecResults) {
-          const similarity = 1 - row.distance; // cosine distance → similarity
+          const similarity = 1 - row.distance; // cosine distance -> similarity
           const existing = results.get(row.chunk_id);
           if (existing) {
             existing.score += similarity * this.vectorWeight;
           } else {
-            const chunk = db.prepare("SELECT path, content, chunk_index FROM chunks WHERE id = ?")
-              .get(row.chunk_id) as { path: string; content: string; chunk_index: number } | undefined;
+            const chunk = db.prepare("SELECT path, content, chunk_index, updated_at FROM chunks WHERE id = ?")
+              .get(row.chunk_id) as { path: string; content: string; chunk_index: number; updated_at: number } | undefined;
             if (chunk) {
               results.set(row.chunk_id, {
                 path: chunk.path,
                 content: chunk.content,
                 score: similarity * this.vectorWeight,
                 chunkIndex: chunk.chunk_index,
+                updatedAt: chunk.updated_at,
               });
             }
           }
@@ -261,10 +322,37 @@ export class MemoryIndex {
       }
     }
 
-    return [...results.values()]
-      .filter((r) => r.score >= minScore)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    // Apply temporal decay scoring
+    if (this.decayEnabled) {
+      for (const result of results.values()) {
+        result.score *= this.computeDecay(result.updatedAt, result.path);
+      }
+    }
+
+    // Apply dream content weight (faster decay, lower base weight)
+    if (this.dreamEnabled) {
+      for (const result of results.values()) {
+        if (this.isDreamContent(result.path)) {
+          result.score *= this.dreamBaseWeight;
+        }
+      }
+    }
+
+    const candidates = [...results.entries()]
+      .filter(([, r]) => r.score >= minScore)
+      .sort(([, a], [, b]) => b.score - a.score);
+
+    // MMR diversity reranking (Maximal Marginal Relevance)
+    if (this.mmrEnabled && candidates.length > 1) {
+      return this.mmrRerank(candidates, limit, db);
+    }
+
+    return candidates.slice(0, limit).map(([, r]) => ({
+      path: r.path,
+      content: r.content,
+      score: r.score,
+      chunkIndex: r.chunkIndex,
+    }));
   }
 
   // CRC: crc-MemoryIndex.md — get()
@@ -283,22 +371,31 @@ export class MemoryIndex {
 
   // CRC: crc-MemoryIndex.md — startWatching()
   startWatching(): void {
-    if (this.watcher) return;
+    if (this.watchers.length > 0) return;
     for (const dir of this.indexedPaths) {
-      this.watcher = watch(dir, { recursive: true }, (_eventType, filename) => {
+      this.watchers.push(watch(dir, { recursive: true }, (_eventType, filename) => {
         if (!filename || !filename.endsWith(".md")) return;
         const fullPath = join(dir, filename);
         this.indexFile(fullPath).catch((err) => {
           this.logger.warn("Reindex failed", { path: fullPath, error: String(err) });
         });
-      });
+      }));
     }
   }
 
   // CRC: crc-MemoryIndex.md — stopWatching()
   stopWatching(): void {
-    this.watcher?.close();
-    this.watcher = null;
+    for (const w of this.watchers) w.close();
+    this.watchers = [];
+  }
+
+  getRecentPaths(limit = 10): string[] {
+    if (!this.initialized || !this.db) return [];
+    const db = this.db as import("better-sqlite3").Database;
+    const rows = db.prepare(
+      "SELECT DISTINCT path FROM chunks ORDER BY updated_at DESC LIMIT ?"
+    ).all(limit) as Array<{ path: string }>;
+    return rows.map((r) => r.path);
   }
 
   // CRC: crc-MemoryIndex.md — getStats()
@@ -310,6 +407,116 @@ export class MemoryIndex {
     const fileCount = (db.prepare("SELECT COUNT(DISTINCT path) AS c FROM chunks").get() as { c: number }).c;
     const chunkCount = (db.prepare("SELECT COUNT(*) AS c FROM chunks").get() as { c: number }).c;
     return { fileCount, chunkCount, indexedPaths: this.indexedPaths };
+  }
+
+  // --- Temporal decay scoring ---
+
+  /** Compute temporal decay multiplier for a search result */
+  private computeDecay(updatedAt: number, path: string): number {
+    if (!updatedAt || this.isEvergreen(path)) return 1.0;
+    const ageDays = (Date.now() - updatedAt) / MS_PER_DAY;
+    if (ageDays <= 0) return 1.0;
+    // Dream content decays faster (shorter half-life)
+    const halfLife = this.isDreamContent(path) ? this.dreamHalfLifeDays : this.decayHalfLifeDays;
+    return Math.pow(0.5, ageDays / halfLife);
+  }
+
+  /** Check if a path matches evergreen patterns (exempt from decay) */
+  private isEvergreen(path: string): boolean {
+    return this.evergreenPatterns.some((pattern) => path.endsWith(pattern));
+  }
+
+  /** Check if a path matches dream content patterns */
+  private isDreamContent(path: string): boolean {
+    return this.dreamPatterns.some((pattern) => path.includes(pattern));
+  }
+
+  // --- MMR (Maximal Marginal Relevance) reranking ---
+
+  private mmrRerank(
+    candidates: Array<[number, { path: string; content: string; score: number; chunkIndex: number; updatedAt: number }]>,
+    limit: number,
+    db: import("better-sqlite3").Database,
+  ): SearchResult[] {
+    const selected: Array<{ id: number; path: string; content: string; score: number; chunkIndex: number }> = [];
+    const remaining = new Map(candidates);
+
+    // Pre-fetch embeddings for MMR similarity if available
+    const embeddingCache = new Map<number, Float32Array>();
+    if (this.embeddingProvider) {
+      try {
+        for (const [id] of candidates) {
+          const row = db.prepare("SELECT embedding FROM chunks_vec WHERE chunk_id = ?").get(id) as { embedding: Buffer } | undefined;
+          if (row) {
+            embeddingCache.set(id, new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4));
+          }
+        }
+      } catch {
+        // Vector table may not exist
+      }
+    }
+
+    while (selected.length < limit && remaining.size > 0) {
+      let bestId = -1;
+      let bestMmrScore = -Infinity;
+
+      for (const [id, candidate] of remaining) {
+        const relevance = candidate.score;
+        let maxSim = 0;
+
+        for (const sel of selected) {
+          const sim = this.chunkSimilarity(id, sel.id, candidate.content, sel.content, embeddingCache);
+          if (sim > maxSim) maxSim = sim;
+        }
+
+        const mmrScore = this.mmrLambda * relevance - (1 - this.mmrLambda) * maxSim;
+        if (mmrScore > bestMmrScore) {
+          bestMmrScore = mmrScore;
+          bestId = id;
+        }
+      }
+
+      if (bestId === -1) break;
+      const best = remaining.get(bestId)!;
+      selected.push({ id: bestId, ...best });
+      remaining.delete(bestId);
+    }
+
+    return selected.map(({ path, content, score, chunkIndex }) => ({ path, content, score, chunkIndex }));
+  }
+
+  /** Compute similarity between two chunks using embeddings (preferred) or Jaccard fallback */
+  private chunkSimilarity(
+    idA: number, idB: number,
+    contentA: string, contentB: string,
+    embeddingCache: Map<number, Float32Array>,
+  ): number {
+    const embA = embeddingCache.get(idA);
+    const embB = embeddingCache.get(idB);
+    if (embA && embB) return this.cosineSimilarity(embA, embB);
+    return this.jaccardSimilarity(contentA, contentB);
+  }
+
+  private cosineSimilarity(a: Float32Array, b: Float32Array): number {
+    let dot = 0, normA = 0, normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    const denom = Math.sqrt(normA) * Math.sqrt(normB);
+    return denom > 0 ? dot / denom : 0;
+  }
+
+  private jaccardSimilarity(a: string, b: string): number {
+    const setA = new Set(a.toLowerCase().split(/\s+/));
+    const setB = new Set(b.toLowerCase().split(/\s+/));
+    let intersection = 0;
+    for (const word of setA) {
+      if (setB.has(word)) intersection++;
+    }
+    const union = setA.size + setB.size - intersection;
+    return union > 0 ? intersection / union : 0;
   }
 
   private chunkContent(content: string, path: string): Chunk[] {

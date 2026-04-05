@@ -18,6 +18,8 @@ import { BrowserManager } from "./browser-manager.js";
 import { createEmbeddingProvider } from "./embedding-provider.js";
 import { registerBuiltinTools } from "./tools/index.js";
 import { AgentRegistry } from "./agent-registry.js";
+import { FactExtractor } from "./fact-extractor.js";
+import { DocsIndex } from "./docs-index.js";
 
 export type LoopState = "starting" | "running" | "stopping" | "stopped";
 
@@ -37,6 +39,8 @@ export class Homarus {
   private httpApi!: HttpApi;
   private browserManager: BrowserManager | null = null;
   private agentRegistry!: AgentRegistry;
+  private factExtractor: FactExtractor | null = null;
+  private docsIndex: DocsIndex | null = null;
   private logger: Logger;
   private processing = false;
   private processInterval: ReturnType<typeof setInterval> | null = null;
@@ -91,6 +95,14 @@ export class Homarus {
 
   getAgentRegistry(): AgentRegistry {
     return this.agentRegistry;
+  }
+
+  getFactExtractor(): FactExtractor | null {
+    return this.factExtractor;
+  }
+
+  getDocsIndex(): DocsIndex | null {
+    return this.docsIndex;
   }
 
   // R104: Event history
@@ -221,16 +233,29 @@ export class Homarus {
     // 5. Memory
     const home = process.env.HOME ?? ".";
     const memoryConfig = configData.memory;
+
+    // Apply decay, dream, and search/MMR config
+    if (memoryConfig?.decay) {
+      this.memoryIndex.setDecayConfig(memoryConfig.decay);
+    }
+    if (memoryConfig?.dreams) {
+      this.memoryIndex.setDreamConfig(memoryConfig.dreams);
+    }
+    if (memoryConfig?.search) {
+      this.memoryIndex.setSearchConfig(memoryConfig.search);
+    }
+
+    let sharedEmbeddingProvider: ReturnType<typeof createEmbeddingProvider> | null = null;
     if (memoryConfig?.embedding) {
-      // Create embedding provider from config
-      const embeddingProvider = createEmbeddingProvider({
+      // Create embedding provider from config (shared with DocsIndex)
+      sharedEmbeddingProvider = createEmbeddingProvider({
         provider: memoryConfig.embedding.provider,
         model: memoryConfig.embedding.model,
         baseUrl: memoryConfig.embedding.baseUrl,
         apiKey: memoryConfig.embedding.apiKey,
         dimensions: memoryConfig.embedding.dimensions,
       }, this.logger);
-      this.memoryIndex.setEmbeddingProvider(embeddingProvider);
+      this.memoryIndex.setEmbeddingProvider(sharedEmbeddingProvider);
 
       const dbPath = `${home}/.homarus/memory/index.sqlite`;
       try {
@@ -245,15 +270,46 @@ export class Homarus {
       }
     }
 
-    // 5b. Browser (lazy — launches on first tool use)
+    // 5a. Fact extractor (passive conversation mining)
+    const feConfig = configData.factExtractor;
+    if (feConfig?.enabled) {
+      // Derive user/agent names from identity files if available
+      const userName = this.identityManager.getUser()
+        ? (this.identityManager.getUser().split("\n")[0]?.replace(/^#\s*/, "") || "User")
+        : "User";
+      const agentName = this.identityManager.getSoul()
+        ? (this.identityManager.getSoul().split("\n")[0]?.replace(/^#\s*/, "") || "Assistant")
+        : "Assistant";
+
+      this.factExtractor = new FactExtractor(this.logger, this.memoryIndex, {
+        enabled: true,
+        batchSize: feConfig.batchSize,
+        extractionDelayMs: feConfig.extractionDelayMs,
+        apiKey: feConfig.apiKey,
+        model: feConfig.model,
+        userName,
+        agentName,
+      });
+      this.logger.info("Fact extractor initialized");
+    }
+
+    // 5b. Docs index
+    const docsConfig = configData.docs;
+    const docsBaseDir = docsConfig?.baseDir ?? `${home}/.homarus/docs`;
+    this.docsIndex = new DocsIndex(this.logger, { baseDir: docsBaseDir });
+    if (sharedEmbeddingProvider) {
+      this.docsIndex.setEmbeddingProvider(sharedEmbeddingProvider);
+    }
+
+    // 5c. Browser (lazy — launches on first tool use)
     if (configData.browser?.enabled) {
       this.browserManager = new BrowserManager(this.logger, configData.browser);
     }
 
-    // 5c. Register built-in tools
+    // 5d. Register built-in tools
     registerBuiltinTools(this.toolRegistry, this.memoryIndex, this.browserManager, this.logger);
 
-    // 5d. Load tool policies from config
+    // 5e. Load tool policies from config
     if (configData.agents?.toolPolicies) {
       for (const p of configData.agents.toolPolicies) {
         this.toolRegistry.addPolicy(p);
@@ -276,6 +332,10 @@ export class Homarus {
     this.timerService = new TimerService(this.logger, timerStore);
     this.timerService.setEmitter((e) => this.emit(e));
     this.timerService.loadTimers();
+    // Load default timers from config (only adds timers not already present by name)
+    if (configData.timers?.defaults) {
+      this.timerService.loadDefaults(configData.timers.defaults);
+    }
     if (configData.timers?.enabled !== false) {
       this.timerService.start();
     }
@@ -328,6 +388,8 @@ export class Homarus {
     await this.skillManager.stopAll();
     this.skillManager.stopWatching();
     this.memoryIndex.stopWatching();
+    if (this.factExtractor) await this.factExtractor.flush();
+    if (this.docsIndex) this.docsIndex.close();
     if (this.browserManager) await this.browserManager.close();
     await this.httpApi.stop();
 

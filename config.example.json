@@ -1,0 +1,72 @@
+{
+  "channels": {
+    "telegram": {
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "allowedChatIds": []
+    }
+  },
+  "memory": {
+    "embedding": {
+      "provider": "ollama",
+      "model": "nomic-embed-text",
+      "baseUrl": "http://127.0.0.1:11434/v1"
+    },
+    "search": {
+      "vectorWeight": 0.7,
+      "ftsWeight": 0.3,
+      "mmrEnabled": true,
+      "mmrLambda": 0.7
+    },
+    "decay": {
+      "enabled": true,
+      "halfLifeDays": 30,
+      "evergreenPatterns": ["MEMORY.md", "SOUL.md", "USER.md", "soul.md", "user.md"]
+    },
+    "extraPaths": []
+  },
+  "identity": {
+    "dir": "~/.homarus/identity"
+  },
+  "dashboard": {
+    "port": 3120,
+    "enabled": true
+  },
+  "timers": {
+    "enabled": true,
+    "defaults": [
+      {
+        "name": "morning-briefing",
+        "type": "cron",
+        "schedule": "0 9 * * *",
+        "timezone": "America/Chicago",
+        "prompt": "Morning routine: 1) Search memory for user patterns and preferences. 2) Check recent events for anything unresolved. 3) Send a message with: a greeting, any pending items, and proactive suggestions."
+      },
+      {
+        "name": "evening-reflection",
+        "type": "cron",
+        "schedule": "0 21 * * *",
+        "timezone": "America/Chicago",
+        "prompt": "Daily reflection: 1) Review today's interactions. 2) Identify new user preferences, corrections, or patterns. 3) Store insights in memory. 4) Send a brief summary if there's something actionable for tomorrow."
+      },
+      {
+        "name": "nightly-dream",
+        "type": "cron",
+        "schedule": "0 3 * * *",
+        "timezone": "America/Chicago",
+        "prompt": "Dream cycle: 1) Memory consolidation -- search recent topics, note what matters. 2) Associative dreaming -- search diverse queries, force-connect results into impressionistic fragments. 3) Overfitting prevention -- challenge one established belief. Store output as dreams/YYYY-MM-DD.md."
+      }
+    ]
+  },
+  "factExtractor": {
+    "enabled": false,
+    "batchSize": 5,
+    "extractionDelayMs": 60000,
+    "model": "claude-haiku-4-5-20251001"
+  },
+  "browser": {
+    "enabled": false,
+    "headless": true,
+    "viewport": { "width": 1280, "height": 720 },
+    "timeout": 30000
+  }
+}
